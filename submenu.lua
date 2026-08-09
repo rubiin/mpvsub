@@ -177,7 +177,7 @@ end)
 local ov = mp.create_osd_overlay("ass-events")
 ov.z = 1000
 
-local C = { text = "E6EDF3", dim = "8B949E", faint = "6E7681",
+local C = { text = "E8EDF3", dim = "A9B2BC", faint = "8E97A4",
             bad = "E06C75", good = "7BC96F" }
 local U = { border = "2A2D35", fill = "14161B", fill2 = "1A1D24",
             hover = "23262E", panel_in = "101216" }
@@ -318,7 +318,9 @@ local function build_ass()
     local L = layout()
     local parts = {}
     local function ev(tags, text)
-        parts[#parts + 1] = "{\\" .. tags .. "}" .. text
+        -- bord0/shad0: strip the default OSD outline/shadow (mpv.conf
+        -- osd-outline-size) so text stays clean and light on the panel.
+        parts[#parts + 1] = "{\\" .. tags .. "\\bord0\\shad0}" .. text
     end
 
     local x0, y0, pw, ph = L.x0, L.y0, L.pw, L.ph
@@ -326,7 +328,7 @@ local function build_ass()
     local hx = x0 + pw * 0.03
 
     -- dim the video behind the panel
-    ev("an7\\pos(0,0)\\p1\\bord0\\shad0\\c&H000000&\\1a" .. alpha(150),
+    ev("an7\\pos(0,0)\\p1\\bord0\\shad0\\c&H000000&\\1a" .. alpha(120),
        "m 0 0 l " .. W .. " 0 l " .. W .. " " .. H .. " l 0 " .. H .. " z")
     -- panel background
     ev("an7\\pos(" .. x0 .. "," .. y0 .. ")\\p1\\bord0\\shad0\\c" .. rgb_to_ass(o.bg)
@@ -366,8 +368,8 @@ local function build_ass()
     local lang_text = S.lang
     ev("an7\\pos(" .. (fl.x + pw * 0.012) .. "," .. (fl.y + fl.h * 0.1) .. ")\\fs" .. fs.input
         .. "\\b0\\c" .. rgb_to_ass(C.text), esc(fit(lang_text, fl.w - pw * 0.06, fs.input)))
-    ev("an3\\pos(" .. (fl.x + fl.w - pw * 0.012) .. "," .. (fl.y + fl.h * 0.12) .. ")\\fs" .. fs.input
-        .. "\\c" .. rgb_to_ass(focus == "lang" and o.accent or C.faint),
+    ev("an5\\pos(" .. (fl.x + fl.w - pw * 0.02) .. "," .. (fl.y + fl.h / 2) .. ")\\fs" .. fs.input
+        .. "\\b0\\c" .. rgb_to_ass(focus == "lang" and o.accent or C.dim),
        esc(S.dropdown and "▲" or "▼"))
 
     -- title / season / episode text fields
@@ -400,7 +402,7 @@ local function build_ass()
         if S.hover_btn == id and focus ~= id then fill = rgb_to_ass(primary and o.accent or U.hover) end
         draw_box(ev, rect, fill, bc, bcw)
         ev("an5\\pos(" .. (rect.x + rect.w / 2) .. "," .. (rect.y + rect.h / 2) .. ")\\fs" .. fs.button
-            .. "\\b1\\c" .. tcol, esc(label))
+            .. "\\b0\\c" .. tcol, esc(label))
     end
     btn(L.btn_hash, "btn_hash", "Search by hash", false)
     btn(L.btn_name, "btn_name", "Search by name", false)
@@ -418,7 +420,7 @@ local function build_ass()
 
     -- header
     ev("an7\\pos(" .. (hx + pw * 0.014) .. "," .. (L.res_top + fs.title * 0.55) .. ")\\fs" .. fs.title
-        .. "\\b1\\c" .. rgb_to_ass(C.text), esc("Subtitle search results"))
+        .. "\\b0\\c" .. rgb_to_ass(C.text), esc("Subtitle search results"))
     ev("an3\\pos(" .. (x0 + pw - L.gap - pw * 0.014) .. "," .. (L.res_top + fs.title * 0.75) .. ")\\fs" .. fs.status
         .. "\\b0\\c" .. rgb_to_ass(C.faint),
        esc(S.loading and "searching…" or (S.search_mode == "name" and "by name" or "by hash")))
@@ -439,7 +441,7 @@ local function build_ass()
            esc("Searching subtitles…"))
     elseif S.error then
         ev("an5\\pos(" .. (W / 2) .. "," .. ((L.res_top + L.res_bottom) / 2 - fs.row) .. ")\\fs" .. fs.title
-            .. "\\b1\\c" .. rgb_to_ass(C.bad), esc(S.error.title or "Something went wrong"))
+            .. "\\b0\\c" .. rgb_to_ass(C.bad), esc(S.error.title or "Something went wrong"))
         if S.error.hint and S.error.hint ~= "" then
             ev("an5\\pos(" .. (W / 2) .. "," .. ((L.res_top + L.res_bottom) / 2 + fs.row * 1.1) .. ")\\fs" .. fs.row
                 .. "\\b0\\c" .. rgb_to_ass("9AA4AF"),
@@ -447,7 +449,7 @@ local function build_ass()
         end
     elseif #S.subs == 0 then
         ev("an5\\pos(" .. (W / 2) .. "," .. ((L.res_top + L.res_bottom) / 2 - fs.row) .. ")\\fs" .. fs.title
-            .. "\\b1\\c" .. rgb_to_ass(C.text), esc("No subtitles found for “" .. S.lang .. "”"))
+            .. "\\b0\\c" .. rgb_to_ass(C.text), esc("No subtitles found for “" .. S.lang .. "”"))
         ev("an5\\pos(" .. (W / 2) .. "," .. ((L.res_top + L.res_bottom) / 2 + fs.row * 1.1) .. ")\\fs" .. fs.row
             .. "\\b0\\c" .. rgb_to_ass(C.dim),
            esc("Try another language (l), search by name, or check the providers."))
@@ -488,7 +490,7 @@ local function build_ass()
 
             if S.downloading == idx then
                 ev("an5\\pos(" .. (W / 2) .. "," .. (rowy + L.lh * 0.45) .. ")\\fs" .. fs.row
-                    .. "\\b1\\c" .. rgb_to_ass(o.accent), esc("Downloading…"))
+                    .. "\\b0\\c" .. rgb_to_ass(o.accent), esc("Downloading…"))
             end
         end
 
@@ -534,13 +536,13 @@ local function build_ass()
         if S.hover_btn == b.id and focus ~= b.id then fill = rgb_to_ass(primary and o.accent or U.hover) end
         draw_box(ev, b, fill, bc, bcw)
         ev("an5\\pos(" .. (b.x + b.w / 2) .. "," .. (b.y + b.h / 2) .. ")\\fs" .. fs.button
-            .. "\\b1\\c" .. tcol, esc(b.label))
+            .. "\\b0\\c" .. tcol, esc(b.label))
     end
 
     -- toast (recent download notification)
     if S.notice and mp.get_time() < S.notice.expires then
         ev("an5\\pos(" .. (W / 2) .. "," .. (y0 + ph - L.footer_h - fs.status * 2.2) .. ")\\fs" .. fs.status
-            .. "\\b1\\c" .. rgb_to_ass(C.good), esc(S.notice.text))
+            .. "\\b0\\c" .. rgb_to_ass(C.good), esc(S.notice.text))
     end
 
     -- ---------------------------------------------------------------------
@@ -582,7 +584,7 @@ local function build_ass()
         draw_box(ev, { x = mx, y = my, w = mw, h = mh }, rgb_to_ass("121318"),
                  rgb_to_ass(o.accent), H * 0.002)
         ev("an7\\pos(" .. (mx + mw * 0.05) .. "," .. (my + mh * 0.06) .. ")\\fs" .. fs.title
-            .. "\\b1\\c" .. rgb_to_ass(o.accent), esc(title))
+            .. "\\b0\\c" .. rgb_to_ass(o.accent), esc(title))
         local lh2 = fs.row * 1.8
         local ty = my + mh * 0.16
         for i, pair in ipairs(pairs) do
@@ -883,8 +885,13 @@ local function set_focus(id)
 end
 
 local function focus_step(d)
-    local i = clamp(focus_index(S.focus) + d, 1, #FOCUS_ORDER)
-    set_focus(FOCUS_ORDER[i])
+    local n = #FOCUS_ORDER
+    -- wrap around so Tab never dead-ends at the last control
+    local i = ((focus_index(S.focus) - 1 + d) % n) + 1
+    local id = FOCUS_ORDER[i]
+    -- Tab from the results list jumps straight to the title field
+    if d > 0 and S.focus == "list" then id = "title" end
+    set_focus(id)
 end
 
 local function nav(d)
