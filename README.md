@@ -1,118 +1,190 @@
-# mpv "sub" — VLC-style subtitle downloader UI
+# mpv subtitle downloader — native GTK4 (Libadwaita)
 
-An in-player subtitle downloader for mpv: a full OSD dialog, similar to
-VLC's "Subtitle downloader", with a search form (language dropdown, title /
-season / episode fields), "Search by hash" and "Search by name" actions, a
-scrollable results list, a status bar and footer buttons. Pick a subtitle,
-download it next to the video, and it is selected automatically.
+A VLC-style subtitle downloader for **mpv**: a small native GTK4/Libadwaita
+popup that searches **OpenSubtitles.com** with their modern REST API (the
+same one the official VLSub extension uses), lets you pick a result,
+downloads it to `~/.local/share/mpv/subtitles/` and loads it into the
+running mpv over its JSON IPC socket — no OSD rendering, no web front-end,
+full keyboard navigation.
 
-![Subtitle downloader dialog](screenshot.png)
+![VLC-style workflow: search → pick → download → auto-loaded](screenshot.png)
 
 ## Requirements
 
-- mpv >= 0.33 (OSD overlays, async subprocess, `osd-dimensions`)
-- Python 3 with [subliminal] installed (e.g. `pipx install subliminal`)
-- network access to the subtitle providers
-
-## Files
-
-| File            | Role                                                        |
-|-----------------|-------------------------------------------------------------|
-| `submenu.lua`   | mpv script: the OSD dialog UI + navigation (CTRL+s)         |
-| `sub_helper.py` | Python backend: searches & downloads via [subliminal]       |
-| `submenu.conf`  | Example options (see `script-opts/` below)                  |
+- Python 3.12+
+- GTK4 + Libadwaita with PyGObject (system packages — see `requirements.txt`)
+- mpv with `--input-ipc-server` support (the script sets it up for you)
+- `guessit` (pip) — everything else is the Python standard library
+- network access to `api.opensubtitles.com` (a free account is only needed
+  to download)
 
 ## Install
 
-1. Copy both `submenu.lua` and `sub_helper.py` into
-   `~/.config/mpv/scripts/` (the helper must sit *next to* the script, or
-   point to it with `helper=` in `script-opts/submenu.conf`).
-2. Install the backend:
+```sh
+# 1. Python backend (recommended: a venv, but any python with gi works)
+python3 -m venv --system-site-packages .venv
+.venv/bin/pip install -r requirements.txt
 
-   ```sh
-   pipx install subliminal
-   ```
+# 2. mpv script — copy both files to your mpv scripts folder
+cp submenu-gtk.lua submenu-gtk.conf ~/.config/mpv/scripts/
 
-   Any Python with subliminal on `PATH` works; `sub_helper.py` automatically
-   re-executes itself with the interpreter that owns the `subliminal`
-   executable, so it also works when the system python3 can't import it.
-3. (Optional) Copy `submenu.conf` to `~/.config/mpv/script-opts/` and tweak.
+# 3. point the script at main.py and the venv python
+cat >> ~/.config/mpv/script-opts/submenu-gtk.conf <<EOF
+app=/home/you/mpvui/main.py
+python=/home/you/mpvui/.venv/bin/python3
+EOF
+```
+
+Then press **CTRL+g** in mpv (or bind your own key in
+`script-opts/submenu-gtk.conf`). The popup opens with a hash search for the
+current file already running.
 
 ## Usage
 
-**`CTRL+s`** (default) — open / close the subtitle dialog. The dialog opens
-with a hash search for the current file already running; the Title field is
-pre-filled from the filename (season/episode are detected from `S01E02`-style
-names).
+The popup is a compact, fixed-size 700×500 window with the classic labelled
+form — about five or six result rows are visible at once and the list
+scrolls for the rest:
 
-### Searching
-
-- **Search by hash** — finds subtitles for the exact file (movie or episode)
-  via OpenSubtitles-compatible hashes. No typing needed.
-- **Search by name** — fill in the **Title** field (plus optional
-  **Season (series)** and **Episode (series)** for TV shows) and press
-  Enter or click the button.
+- **Subtitles language** — dropdown with the full OpenSubtitles language
+  list (100+ languages, including `pt-br`, `zh-cn`, `zh-tw`, …); the last
+  selection is remembered.
+- **Search by hash** — finds subtitles for the exact file on disk via the
+  OpenSubtitles movie hash; no typing needed. If the hash has no matches it
+  automatically falls back to a name search (like VLSub).
+- **Title / Search by name** — type a movie or series title (season/episode
+  are auto-detected with guessit and can be edited in the Season and
+  Episode fields), then press Enter or click **Search by name**.
+- **IMDB ID** — search directly by IMDB id (`tt1375666`) instead of a title.
+- **Sort by** — the OpenSubtitles API sort options: Best match (client-side
+  scoring), Downloads, New downloads, Ratings, Votes, Upload date, Trusted
+  uploader, HD, Release — plus an **↑ Asc / ↓ Desc** direction toggle.
+  Sorting is applied server-side via `order_by`/`order_direction`.
+- **Results list** — a scrollable list showing ~5-6 rows at first, one
+  Subtitle Name column spanning the full width (with a **HI** badge for
+  hearing-impaired releases). Rows highlight on hover;
+  **double-click downloads immediately**.
+- **Download selection** — downloads the selected subtitle to
+  `~/.local/share/mpv/subtitles/`, loads it into mpv (`sub-add` + `sid`) and
+  shows a **Subtitle loaded.** toast.
+- **Show help / Show config** — key bindings and current settings.
+- **Close** — closes the popup.
 
 ### Keys
 
 | Key | Action |
 |-----|--------|
-| `Tab` / `Shift+Tab` | move focus between controls |
-| `↑`/`↓` `←`/`→` | navigate (form rows, list, buttons, dropdown) |
-| `Enter` | activate the focused control / download the selection |
-| `Space` | activate (types a space inside a text field) |
-| letters / digits / symbols | type into the focused text field |
-| `Backspace` | delete previous character |
-| `r` / `n` | search by hash / by name |
-| `l` | cycle language |
-| `c` | cancel the running search |
-| `g` / `G` | first / last result |
-| `PgUp` / `PgDn` | page through results |
-| `Esc` | close (first closes popup / help / config) |
+| `↑` / `↓` | move through results |
+| `Enter` | download the selected row |
+| `Double-click` | download that row |
+| `Ctrl+F` | focus the search entry |
+| `Ctrl+R` | refresh search |
+| `Esc` | close |
 
-Mouse: hover highlights rows and buttons, click focuses or activates,
-double-click downloads, wheel scrolls, right-click closes.
+### Running from the command line
 
-The downloaded file is saved next to the video (`download_dir=` to change),
-rescanned, and selected — playback continues with the new subtitle active.
+Launch the app directly from a terminal (use the venv python if you created
+one during install):
 
-## Configuration
+```sh
+.venv/bin/python3 main.py                              # search by name only
+.venv/bin/python3 main.py /path/to/video.mkv           # hash-search a file
+.venv/bin/python3 main.py --socket /tmp/mpv.sock       # connect to a running mpv
+.venv/bin/python3 main.py --socket /tmp/mpv.sock --file /path/to/video.mkv
+```
 
-All options go in `~/.config/mpv/script-opts/submenu.conf` (see the example
-`submenu.conf` in this repo). Highlights:
+| Option | Meaning |
+|--------|---------|
+| `<video>` (positional) | video file to hash-search for subtitles |
+| `--socket <path>` | mpv JSON IPC unix socket to connect to |
+| `--file <path>` | video file (combined with `--socket`) |
+| `--query <text>` | search a title by name on startup |
+| `--debug` | verbose logging (search/download results) |
+| `--width <px>` / `--height <px>` | override the window size |
 
-| Option          | Default                                  | Meaning                        |
-|-----------------|------------------------------------------|--------------------------------|
-| `key`           | `CTRL+s`                                 | open the dialog                |
-| `languages`     | `en`                                     | comma separated IETF codes     |
-| `providers`     | `opensubtitlescom,podnapisi,subtis,tvsubtitles` | subliminal providers  |
-| `download_dir`  | (video dir)                              | where subtitles are saved      |
-| `accent`/`bg`   | `E6A23C` / `0F1115`                      | UI colors (RRGGBB)             |
+When connected to mpv, the popup follows media changes automatically and
+sub-adds downloads into the player. Without a socket it still works — files
+are just saved to disk. For a quick launcher, drop an alias in your shell rc:
+
+```sh
+alias subs='/home/you/mpvui/.venv/bin/python3 /home/you/mpvui/main.py'
+```
+
+(replace `/home/you/mpvui` with your checkout path, then `subs` opens the
+popup, `subs /path/to/video.mkv` hash-searches a file).
 
 ## Downloading (credentials)
 
-Searching works anonymously. **Downloading from OpenSubtitles.com requires
-a free account.** Provide credentials either as env vars:
+The OpenSubtitles REST API needs an **Api-Key** on every request (this app
+defaults to the key shipped in the official VLSub extension — override it
+with your own free key from https://opensubtitles.com). Searching works
+anonymously; **downloading requires a free account.** Provide credentials
+as env vars:
 
 ```sh
-export SUBLIMINAL_PROVIDER_OPENSUBTITLESCOM_USERNAME=you@example.com
-export SUBLIMINAL_PROVIDER_OPENSUBTITLESCOM_PASSWORD=secret
+export OPENSUBTITLES_API_KEY=d3Sba6j6VYnty3ir5T8GXYoAuiLSBf0S   # optional
+export OPENSUBTITLES_USERNAME=you@example.com
+export OPENSUBTITLES_PASSWORD=secret
 ```
 
-or in `~/.config/subliminal/subliminal.toml`:
+or in `~/.config/mpvui-subtitles/settings.json`:
 
-```toml
-[provider.opensubtitlescom]
-username = "you@example.com"
-password = "secret"
+```json
+{
+  "api_key": "…",
+  "username": "you@example.com",
+  "password": "secret",
+  "token": "…"
+}
 ```
 
-Other providers (`podnapisi`, `subtis`, `tvsubtitles`, …) need no account.
+Env vars take precedence over the settings file. Instead of credentials you
+can also paste a **pre-issued session token** (grab one at
+https://opensubtitles.com) into the `token` field or the
+`OPENSUBTITLES_TOKEN` env var — it is used as-is on every request with no
+login round-trip, and takes precedence over username/password. Without any
+of these the app searches token-less (the API rejects credential-less
+logins, but an Api-Key alone is enough for searching) — downloads are
+refused with a hint until you configure an account.
+
+## Configuration
+
+The app stores its settings in
+`~/.config/mpvui-subtitles/settings.json` (last languages, sort mode +
+direction, download dir, encoding, window size, credentials). Change the
+download directory there if you want subtitles elsewhere.
 
 ## Notes
 
-- Only local files are searchable (network streams like `ytdl://` are
-  skipped).
-- Only subtitles are fetched — never the video itself.
+- Only subtitles are ever fetched — never video content.
+- Network streams (e.g. `ytdl://`) fall back to a name search using the
+  media title.
+- Search results are cached in memory for 10 minutes (keyed by query +
+  sort mode); the login token is cached for 24 hours and re-fetched
+  automatically on `401`.
+- Transient download errors (`503` overloaded / `429` rate-limited) are
+  retried automatically with a short backoff before an error is shown.
+  OpenSubtitles' download service occasionally 503s for everyone — that is
+  server-side and usually clears in minutes.
 
-[subliminal]: https://github.com/Diaoul/subliminal
+## Project layout
+
+```
+main.py                 entry point / CLI parsing
+app.py                  Adw.Application (single instance)
+models.py               dataclasses + OpenSubtitles language catalog
+settings.py             persistent settings (JSON) + sort modes
+cache.py                in-memory TTL search cache
+search.py               guessit metadata, query building, scoring/sorting
+opensubtitles_client.py OpenSubtitles REST API v1 facade (stdlib urllib)
+moviehash.py            OpenSubtitles movie-hash computation
+ipc.py                  mpv JSON IPC client (unix socket)
+ui/                     GTK4 widgets (window, search bar, list, dialogs)
+submenu-gtk.lua         mpv script: socket setup + launcher (CTRL+g)
+submenu-gtk.conf        mpv script options
+assets/                 icons
+tests/                  logic + download-flow tests (python3 tests/test_logic.py; python3 tests/test_download.py)
+```
+
+The API client is ported from the official VLSub extension
+([opensubtitles/vlsub-opensubtitles-com](https://github.com/opensubtitles/vlsub-opensubtitles-com)),
+minus its i18n and VLC-UI code.
