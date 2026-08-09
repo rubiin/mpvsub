@@ -1,12 +1,12 @@
 # mpv "sub" — VLC-style subtitle downloader UI
 
-An in-player subtitle downloader for mpv: a full OSD picker, similar to
-VLC's "Subtitle downloader", listing downloadable subtitles for the
-currently playing video — language, release, provider, format and download
-count. Pick one, press Enter, it is downloaded next to the video and
-selected automatically.
+An in-player subtitle downloader for mpv: a full OSD dialog, similar to
+VLC's "Subtitle downloader", with a search form (language dropdown, title /
+season / episode fields), "Search by hash" and "Search by name" actions, a
+scrollable results list, a status bar and footer buttons. Pick a subtitle,
+download it next to the video, and it is selected automatically.
 
-![Subtitle downloader picker](screenshot.png)
+![Subtitle downloader dialog](screenshot.png)
 
 ## Requirements
 
@@ -18,7 +18,7 @@ selected automatically.
 
 | File            | Role                                                        |
 |-----------------|-------------------------------------------------------------|
-| `submenu.lua`   | mpv script: the OSD picker UI + navigation (CTRL+s)         |
+| `submenu.lua`   | mpv script: the OSD dialog UI + navigation (CTRL+s)         |
 | `sub_helper.py` | Python backend: searches & downloads via [subliminal]       |
 | `submenu.conf`  | Example options (see `script-opts/` below)                  |
 
@@ -40,14 +40,38 @@ selected automatically.
 
 ## Usage
 
-- **`CTRL+s`** (default) — open / close the subtitle downloader.
-- While open:
-  - `↑`/`↓` or `j`/`k` — move selection · `PgUp`/`PgDn` — page
-  - `Enter`/`Space` — download the selected subtitle
-  - `r` — refresh search · `l` — cycle language · `c` — cancel search
-  - `g`/`G` — first/last · `Esc`/`q` — close
-  - Mouse: hover to select, double-click to download, wheel to scroll,
-    right-click to close.
+**`CTRL+s`** (default) — open / close the subtitle dialog. The dialog opens
+with a hash search for the current file already running; the Title field is
+pre-filled from the filename (season/episode are detected from `S01E02`-style
+names).
+
+### Searching
+
+- **Search by hash** — finds subtitles for the exact file (movie or episode)
+  via OpenSubtitles-compatible hashes. No typing needed.
+- **Search by name** — fill in the **Title** field (plus optional
+  **Season (series)** and **Episode (series)** for TV shows) and press
+  Enter or click the button.
+
+### Keys
+
+| Key | Action |
+|-----|--------|
+| `Tab` / `Shift+Tab` | move focus between controls |
+| `↑`/`↓` `←`/`→` | navigate (form rows, list, buttons, dropdown) |
+| `Enter` | activate the focused control / download the selection |
+| `Space` | activate (types a space inside a text field) |
+| letters / digits / symbols | type into the focused text field |
+| `Backspace` | delete previous character |
+| `r` / `n` | search by hash / by name |
+| `l` | cycle language |
+| `c` | cancel the running search |
+| `g` / `G` | first / last result |
+| `PgUp` / `PgDn` | page through results |
+| `Esc` | close (first closes popup / help / config) |
+
+Mouse: hover highlights rows and buttons, click focuses or activates,
+double-click downloads, wheel scrolls, right-click closes.
 
 The downloaded file is saved next to the video (`download_dir=` to change),
 rescanned, and selected — playback continues with the new subtitle active.
@@ -59,9 +83,9 @@ All options go in `~/.config/mpv/script-opts/submenu.conf` (see the example
 
 | Option          | Default                                  | Meaning                        |
 |-----------------|------------------------------------------|--------------------------------|
-| `key`           | `CTRL+s`                                 | open the picker                |
+| `key`           | `CTRL+s`                                 | open the dialog                |
 | `languages`     | `en`                                     | comma separated IETF codes     |
-| `providers`     | `opensubtitlescom,podnapisi,subtis,tvsubtitles` | subliminal providers |
+| `providers`     | `opensubtitlescom,podnapisi,subtis,tvsubtitles` | subliminal providers  |
 | `download_dir`  | (video dir)                              | where subtitles are saved      |
 | `accent`/`bg`   | `E6A23C` / `0F1115`                      | UI colors (RRGGBB)             |
 

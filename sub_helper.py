@@ -8,7 +8,12 @@ VLC-style subtitle picker. Human-readable logs go to stderr.
 Modes
 -----
   search   <video> [--lang en] [--lang fr] ... [--providers a,b] [--query "..."]
+           [--season N] [--episode N]
            -> {"ok": true, "video": {...}, "subs": [...]}
+
+`--query` switches to a manual name search: instead of hashing the file, the
+provider APIs are queried with the given title. Adding both `--season` and
+`--episode` searches as a TV series (series = query).
 
   download <video> <provider> <subid> [--lang en] [--dir DIR] [--encoding utf-8]
            -> {"ok": true, "file": "/abs/path/Video.en.srt", ...}
@@ -207,11 +212,16 @@ def video_to_json(v: Video) -> dict:
     return d
 
 
-def build_search_video(path: str, query: str | None) -> Video:
-    v = subliminal.scan_video(path)
+def build_search_video(path: str, query: str | None,
+                       season: int | None = None,
+                       episode: int | None = None) -> Video:
     if query:
         # manual search: drop the hash/identity, search by the query text
-        return Movie(name=query)
+        if season is not None and episode is not None:
+            from subliminal.video import Episode
+            return Episode(name=query, series=query, season=season, episodes=episode)
+        return Movie(name=query, title=query)
+    v = subliminal.scan_video(path)
     try:
         hash_refine(v)  # compute opensubtitles-style hashes (no network)
     except Exception:
@@ -220,8 +230,9 @@ def build_search_video(path: str, query: str | None) -> Video:
 
 
 def do_search(path: str, langs: set, providers: list[str],
-              query: str | None, max_results: int) -> None:
-    video = build_search_video(path, query)
+              query: str | None, season: int | None,
+              episode: int | None, max_results: int) -> None:
+    video = build_search_video(path, query, season, episode)
     result = subliminal.list_subtitles(
         {video},
         langs,
@@ -330,6 +341,8 @@ def main(argv: list[str]) -> int:
     sp.add_argument("-l", "--lang", action="append", default=["en"])
     sp.add_argument("-p", "--providers", default=",".join(DEFAULT_PROVIDERS))
     sp.add_argument("--query", default=None)
+    sp.add_argument("--season", type=int, default=None)
+    sp.add_argument("--episode", type=int, default=None)
     sp.add_argument("--max", type=int, default=100)
 
     dp = sub.add_parser("download")
@@ -350,6 +363,8 @@ def main(argv: list[str]) -> int:
                 parse_languages(args.lang),
                 providers,
                 args.query,
+                args.season,
+                args.episode,
                 args.max,
             )
         else:
