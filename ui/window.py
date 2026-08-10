@@ -26,6 +26,7 @@ from search import (
 from opensubtitles_client import OpenSubtitlesClient
 from settings import SETTINGS_FILE, Settings
 from ui.dialogs import (
+    CredentialsDialog,
     show_config_dialog,
     show_credentials_dialog,
     show_error_dialog,
@@ -620,6 +621,14 @@ class SubtitleWindow(Adw.ApplicationWindow):
             or self.settings.password
         )
 
+    def is_first_run(self) -> bool:
+        """True on the very first launch: no settings file exists yet and no
+        credentials are configured anywhere (env vars or settings)."""
+        return not SETTINGS_FILE.exists() and not self._has_credentials()
+
+    def is_credentials_open(self) -> bool:
+        return self._credentials_dialog_open
+
     def _on_mapped(self, *_args) -> None:
         GLib.idle_add(self._maybe_show_startup_credentials)
 
@@ -627,13 +636,23 @@ class SubtitleWindow(Adw.ApplicationWindow):
         if self._startup_prompt_done:
             return
         self._startup_prompt_done = True
-        # first run: no settings file yet and no credentials anywhere — ask
-        if not SETTINGS_FILE.exists() and not self._has_credentials():
+        if self.is_first_run():
             self._open_credentials()
 
-    def _open_credentials(self) -> None:
+    def prompt_for_credentials_first_run(self) -> None:
+        """First launch: ask for credentials before showing the main window.
+
+        The main window stays hidden while the dialog is up and is revealed
+        as soon as the user saves or cancels.
+        """
+        self._startup_prompt_done = True
+        dialog = self._open_credentials()
+        if dialog is not None:
+            dialog.connect("closed", lambda *_: self.present())
+
+    def _open_credentials(self) -> Optional[CredentialsDialog]:
         if self._credentials_dialog_open:
-            return  # already showing (e.g. startup prompt + failing search)
+            return None  # already showing (e.g. startup prompt + failing search)
         self._credentials_dialog_open = True
 
         def on_saved() -> None:
@@ -646,6 +665,7 @@ class SubtitleWindow(Adw.ApplicationWindow):
         dialog.connect(
             "closed", lambda *_: setattr(self, "_credentials_dialog_open", False)
         )
+        return dialog
 
     def _retry_last_search(self) -> None:
         self._show_banner("")

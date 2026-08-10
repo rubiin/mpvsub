@@ -40,9 +40,17 @@ class SubtitleApp(Adw.Application):
             self.window = SubtitleWindow(
                 application=self, settings=Settings.load(), cli=self._cli
             )
+            # first run: ask for credentials before showing the main window,
+            # so only the credentials dialog appears (the window is revealed
+            # once it closes)
+            if self.window.is_first_run():
+                self.window.prompt_for_credentials_first_run()
+                return
         elif self._cli is not None:
             # relaunch from mpv: re-target the existing window
             self.window.apply_cli(self._cli)
+        if self.window.is_credentials_open():
+            return  # a credentials dialog is up (e.g. first run) — keep it alone
         self.window.present()
 
 

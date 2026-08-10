@@ -94,6 +94,29 @@ shell rc, and any fallback downloads in `~/.local/share/mpv/subtitles/`
 (saved there only by name searches without a local file). Restart mpv so
 its key binding is released.
 
+## Building executables
+
+`packaging/` holds a PyInstaller spec that bundles the app into a standalone
+executable. The `.github/workflows/build.yml` workflow builds both platforms
+on every push to `master` and on version tags (`v*`), smoke-tests each
+bundle, and uploads the zips as run artifacts:
+
+- **Linux** — `dist/mpvsub/` (launcher + bundled Python). The gi/GTK4
+  bindings come from the system, so the machine running it still needs
+  GTK4 + libadwaita (see Requirements).
+- **Windows** — a self-contained `mpvsub.exe` folder built against the
+  MSYS2 MINGW64 GTK4 stack: gtk4, libadwaita, the Adwaita icon theme, glib
+  schemas and gdk-pixbuf loaders are bundled inside.
+
+Build locally on Linux (needs the system GTK4 bindings):
+
+```sh
+python3 -m venv --system-site-packages .venv
+.venv/bin/pip install pyinstaller guessit
+.venv/bin/pyinstaller --noconfirm packaging/mpvsub.spec
+./dist/mpvsub/mpvsub
+```
+
 ## Usage
 
 The popup is a compact, fixed-size 700×500 window with the classic labelled
@@ -292,6 +315,8 @@ mpvsub.lua              mpv script: socket setup + launcher (CTRL+g)
 mpvsub.conf             mpv script options
 install.sh              curl|bash installer (see Install)
 assets/                 icons
+packaging/              PyInstaller spec + runtime hook (see Building executables)
+.github/workflows/      CI: tests (ci.yml) + executable builds (build.yml)
 tests/                  logic + download-flow tests (.venv/bin/python3 tests/test_logic.py; .venv/bin/python3 tests/test_download.py)
 ```
 

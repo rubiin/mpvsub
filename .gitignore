@@ -3,3 +3,10 @@ __pycache__/
 .venv/
 *.egg-info/
 settings.json
+
+# PyInstaller build output
+build/
+dist/
+*.spec
+!packaging/*.spec
+

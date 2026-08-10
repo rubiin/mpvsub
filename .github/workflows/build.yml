@@ -1,0 +1,114 @@
+name: Build executables
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ------------------------------------------------------------------
+  # Linux: PyInstaller bundle + system GTK4/libadwaita (gi bindings come
+  # from the distro packages, so the bundle needs GTK4 installed).
+  # ------------------------------------------------------------------
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Use the system python3 (3.12 on ubuntu-latest) — it is the one that
+      # sees the apt-installed gi bindings in /usr/lib/python3/dist-packages.
+      # actions/setup-python would install a separate interpreter that never
+      # sees them, breaking `import gi` inside the venv.
+      - name: Install GTK4 / libadwaita bindings
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            python3-gi python3-gi-cairo gir1.2-gtk-4.0 gir1.2-adw-1 \
+            python3-venv xvfb
+
+      - name: Create venv and install build deps
+        run: |
+          python3 -m venv --system-site-packages .venv
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/python -m pip install pyinstaller guessit
+
+      - name: Build with PyInstaller
+        run: .venv/bin/pyinstaller --noconfirm packaging/mpvsub.spec
+
+      - name: Smoke-test the bundle (xvfb)
+        run: |
+          timeout 8 xvfb-run -a ./dist/mpvsub/mpvsub
+          code=$?
+          if [ "$code" = "124" ]; then
+            echo "bundle stayed running under xvfb (OK)"
+          else
+            echo "bundle exited early with code $code"
+            exit 1
+          fi
+
+      - name: Package zip
+        run: .venv/bin/python -m zipfile -c mpvsub-linux-x86_64.zip dist/mpvsub
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mpvsub-linux-x86_64
+          path: mpvsub-linux-x86_64.zip
+
+  # ------------------------------------------------------------------
+  # Windows: self-contained bundle from the MSYS2 MINGW64 GTK4 stack
+  # (python + pygobject + gtk4 + libadwaita built for Windows).
+  # ------------------------------------------------------------------
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gtk4
+            mingw-w64-x86_64-libadwaita
+            mingw-w64-x86_64-adwaita-icon-theme
+            mingw-w64-x86_64-python
+            mingw-w64-x86_64-python-pip
+            mingw-w64-x86_64-python-gobject
+            mingw-w64-x86_64-python-pyinstaller
+
+      - name: Install Python deps (guessit)
+        shell: msys2 {0}
+        run: pip install guessit
+
+      - name: Build with PyInstaller
+        shell: msys2 {0}
+        run: python -m PyInstaller --noconfirm packaging/mpvsub.spec
+
+      - name: Smoke-test the bundle
+        shell: msys2 {0}
+        run: |
+          ls -la dist/mpvsub
+          ./dist/mpvsub/mpvsub.exe &
+          pid=$!
+          sleep 8
+          if kill -0 $pid 2>/dev/null; then
+            echo "bundle stayed running (OK)"
+            kill $pid
+          else
+            echo "bundle exited early"
+            exit 1
+          fi
+
+      - name: Package zip
+        shell: msys2 {0}
+        run: python -m zipfile -c mpvsub-windows-x86_64.zip dist/mpvsub
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mpvsub-windows-x86_64
+          path: mpvsub-windows-x86_64.zip
