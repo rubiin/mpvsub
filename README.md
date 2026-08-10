@@ -99,7 +99,9 @@ its key binding is released.
 `packaging/` holds a PyInstaller spec that bundles the app into a standalone
 executable. The `.github/workflows/build.yml` workflow builds both platforms
 on every push to `master` and on version tags (`v*`), smoke-tests each
-bundle, and uploads the zips as run artifacts:
+bundle, and uploads the zips as run artifacts. Pushing a `v*` tag (e.g.
+`git tag v1.0 && git push --tags`) also creates a GitHub **Release** with
+both zips attached:
 
 - **Linux** — `dist/mpvsub/` (launcher + bundled Python). The gi/GTK4
   bindings come from the system, so the machine running it still needs
