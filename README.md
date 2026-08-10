@@ -1,11 +1,10 @@
 # mpv subtitle downloader
 
-A VLC-style subtitle downloader for **mpv**: a small native GTK4/Libadwaita
-popup that searches **OpenSubtitles.com** with their modern REST API (the
-same one the official VLSub extension uses), lets you pick a result and
-saves it **next to the video file** (so mpv auto-loads it), or loads it
-into the running mpv over its JSON IPC socket — no OSD rendering, no web
-front-end, full keyboard navigation.
+A small native GTK4/Libadwaita popup for **mpv** that finds subtitles on
+**OpenSubtitles.com** via the same REST API the official VLSub extension
+uses. Pick a result and it's saved **next to the video file** so mpv
+auto-loads it — or loaded straight into the running player over its JSON
+IPC socket. No OSD rendering, no web front-end, full keyboard navigation.
 
 ![VLC-style workflow: search → pick → download → auto-loaded](screenshot.png)
 
@@ -22,11 +21,11 @@ front-end, full keyboard navigation.
 
 ### Automated (`install.sh`)
 
-The bundled `install.sh` sets everything up: it fetches the source, creates
-a venv with system site-packages, installs the pip dependency, copies the
-mpv script and writes `script-opts/mpvsub.conf` for you. It needs `git`,
-`python3` (3.12+) and the GTK4/Libadwaita Python bindings — it checks for
-them and prints the distro-specific install command if any are missing.
+The bundled `install.sh` does the whole setup: fetch the source, create a
+venv, install the pip dependency, copy the mpv script and write
+`script-opts/mpvsub.conf`. It needs `git`, `python3` (3.12+) and the
+GTK4/Libadwaita Python bindings — it checks for them and prints the
+distro-specific install command if any are missing.
 
 Install with curl:
 
@@ -118,13 +117,13 @@ scrolls for the rest:
   Subtitle Name column spanning the full width (with a **HI** badge for
   hearing-impaired releases). Rows highlight on hover;
   **double-click downloads immediately**.
-- **Download selection** — saves the subtitle **next to the video file**
-  when searching a local file (`<name>.<lang>.srt`, auto-loaded by mpv);
-  name searches without a local file fall back to the download directory
-  (`~/.local/share/mpv/subtitles/`). A file of the same name is overwritten
-  (atomically — an interrupted download never corrupts an existing
-  subtitle). Also loads it into mpv (`sub-add` + `sid`) and shows a
-  **Subtitle loaded.** toast.
+- **Download selection** — saves **next to the video file** when you're
+  searching a local file (`<name>.<lang>.srt`, auto-loaded by mpv); name
+  searches without a local file use the download directory
+  (`~/.local/share/mpv/subtitles/`). Existing files are overwritten safely
+  — an interrupted download never corrupts a subtitle. It also loads the
+  subtitle into mpv (`sub-add` + `sid`) and shows a **Subtitle loaded.**
+  toast.
 - **Show help / Show config** — key bindings and current settings.
 - **Close** — closes the popup.
 
@@ -173,10 +172,10 @@ popup, `subs /path/to/video.mkv` hash-searches a file).
 
 ## Downloading (credentials)
 
-The OpenSubtitles REST API needs an **Api-Key** on every request; this app
-always uses the key shipped in the official VLSub extension. Every request
-also needs an account: the app logs in with your **username/password** on
-each start. Provide credentials as env vars:
+The API needs an **Api-Key** on every request — this app uses the one
+shipped with the official VLSub extension. It also needs an account, so
+the app logs in with your **username/password** on each start. Provide
+them as env vars:
 
 ```sh
 export OPENSUBTITLES_USERNAME=you@example.com
@@ -192,27 +191,25 @@ or in `~/.config/mpvsub-subtitles/settings.json`:
 }
 ```
 
-The password is never written in plaintext: it is obfuscated with a
-machine-local key (derived from `/etc/machine-id`) before saving, and
-decoded again on load. Because the key is tied to the machine, copying
-`settings.json` to another computer won't decode the password — just
-re-enter it via the **Account…** button. A legacy plaintext `password`
-entry is still read and migrated to `password_obfuscated` on the next save.
+Your password is never stored in plaintext — it's obfuscated with a
+machine-local key (derived from `/etc/machine-id`) before saving. Because
+the key stays on this machine, copying `settings.json` elsewhere won't
+decode it: just re-enter it via the **Account…** button. A legacy
+plaintext `password` entry is still read and migrated to the obfuscated
+form on the next save.
 
-Env vars take precedence over the settings file. The **Account…** dialog
-(also reachable from the bottom action bar) opens by itself on first run —
-when there is no `settings.json` yet — and whenever a search fails because
-credentials are missing or wrong. Saving valid credentials then re-runs the
-failed search automatically.
+Env vars win over the settings file. The **Account…** dialog (also in the
+bottom action bar) pops up on first run — when there's no `settings.json`
+yet — and whenever a search fails on missing or wrong credentials. Saving
+valid ones re-runs the failed search automatically.
 
 ## Configuration
 
-The app stores its settings in
-`~/.config/mpvsub-subtitles/settings.json` (last languages, sort mode +
-direction, download dir, encoding, credentials). The download
-directory is only used as a fallback for searches without a local video
-file — subtitles for a file on disk are saved right next to it. Change it
-there if you want the fallback elsewhere.
+Settings live in `~/.config/mpvsub-subtitles/settings.json` (last
+languages, sort mode + direction, download dir, encoding, credentials).
+The download directory only matters for searches without a local video —
+subtitles for a file on disk are saved right next to it. Change it there
+if you want that fallback elsewhere.
 
 ## Troubleshooting
 
