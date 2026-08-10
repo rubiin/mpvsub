@@ -18,9 +18,9 @@ from the official VLSub extension for VLC
 
 Only the stdlib (``urllib``) is used; all network work runs inside
 ``asyncio.to_thread`` so the GTK main loop never blocks.  Credentials are
-read from ``OPENSUBTITLES_API_KEY`` / ``OPENSUBTITLES_USERNAME`` /
-``OPENSUBTITLES_PASSWORD`` (or the app settings); the default API key is the
-one shipped in the reference VLSub extension.
+read from ``OPENSUBTITLES_USERNAME`` / ``OPENSUBTITLES_PASSWORD`` (or the
+app settings); the Api-Key is fixed to the one shipped in the reference
+VLSub extension.
 """
 
 from __future__ import annotations
@@ -57,7 +57,8 @@ log = logging.getLogger(__name__)
 #: default Api-Key — the one shipped in the official VLSub extension config
 DEFAULT_API_KEY = "d3Sba6j6VYnty3ir5T8GXYoAuiLSBf0S"
 API_BASE = "https://api.opensubtitles.com/api/v1"
-USER_AGENT = "mpvui-subtitles/1.0"
+USER_AGENT = "VLSub OpenSubtitles.com v1.2.9"
+
 
 #: how long a login token is considered valid (the extension uses 24 h)
 TOKEN_TTL_SECONDS = 24 * 60 * 60
@@ -72,10 +73,9 @@ _DOWNLOAD_RETRY_BACKOFF = (2.0, 4.0)
 _SORT_BY_FIELD = {key: api for key, _label, api in SORT_MODES}
 
 CREDENTIALS_HINT = (
-    "OpenSubtitles.com needs a free account + API key. Set "
-    "OPENSUBTITLES_API_KEY, OPENSUBTITLES_USERNAME and OPENSUBTITLES_PASSWORD "
-    "(or the api_key/username/password fields in "
-    "~/.config/mpvui-subtitles/settings.json). See the README."
+    "OpenSubtitles.com needs a free account — use the Account… button to "
+    "enter your username/password (or set OPENSUBTITLES_USERNAME and "
+    "OPENSUBTITLES_PASSWORD). See the README."
 )
 
 
@@ -98,21 +98,10 @@ class OpenSubtitlesClient:
 
     # -- configuration ------------------------------------------------------
 
-    def _api_key(self) -> str:
-        return (
-            os.environ.get("OPENSUBTITLES_API_KEY")
-            or self.settings.api_key
-            or DEFAULT_API_KEY
-        )
-
     def _credentials(self) -> tuple[str, str]:
         username = os.environ.get("OPENSUBTITLES_USERNAME") or self.settings.username
         password = os.environ.get("OPENSUBTITLES_PASSWORD") or self.settings.password
         return username, password
-
-    def _configured_token(self) -> Optional[str]:
-        """Pre-issued session token (env var wins over settings)."""
-        return os.environ.get("OPENSUBTITLES_TOKEN") or self.settings.token or None
 
     # -- HTTP layer ---------------------------------------------------------
 
@@ -169,25 +158,20 @@ class OpenSubtitlesClient:
 
     # -- session ------------------------------------------------------------
 
-    def _ensure_token(self) -> Optional[str]:
+    def _ensure_token(self) -> str:
         """Return a valid bearer token, logging in when needed/expired.
 
-        A pre-issued token (``OPENSUBTITLES_TOKEN`` / settings ``token``) is
-        used as-is with no login round-trip.  Otherwise, without credentials
-        the client stays token-less (searching works with just the Api-Key);
-        with credentials a failed login raises so the user sees why.
+        Credentials (username/password) are required for every request — there
+        is no anonymous mode.  A failed login raises so the user sees why.
         """
-        preset = self._configured_token()
-        if preset:
-            if self._token != preset:
-                self._token = preset
-                self._token_expires = time.time() + TOKEN_TTL_SECONDS
-            return self._token
         username, password = self._credentials()
         if not username or not password:
-            # anonymous access: the API rejects credential-less logins, so go
-            # tokenless — searching works with just the Api-Key
-            return None
+            raise RuntimeError(
+                "No OpenSubtitles credentials configured — set "
+                "OPENSUBTITLES_USERNAME and OPENSUBTITLES_PASSWORD (or the "
+                "username/password fields in "
+                "~/.config/mpvui-subtitles/settings.json)."
+            )
         if self._token and self._token_expires > time.time():
             return self._token
         with self._token_lock:
@@ -196,7 +180,7 @@ class OpenSubtitlesClient:
                 return self._token
             body = json.dumps({"username": username, "password": password}).encode("utf-8")
             headers = {
-                "Api-Key": self._api_key(),
+                "Api-Key": DEFAULT_API_KEY,
                 "Content-Type": "application/json",
                 "User-Agent": USER_AGENT,
             }
@@ -223,10 +207,8 @@ class OpenSubtitlesClient:
             )
 
     def _auth_headers(self, extra: Optional[dict] = None) -> dict:
-        headers = {"Api-Key": self._api_key(), "User-Agent": USER_AGENT}
-        token = self._ensure_token()
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
+        headers = {"Api-Key": DEFAULT_API_KEY, "User-Agent": USER_AGENT}
+        headers["Authorization"] = f"Bearer {self._ensure_token()}"
         if extra:
             headers.update(extra)
         return headers
@@ -399,12 +381,9 @@ class OpenSubtitlesClient:
     def _error_message(self, status: int, data: Optional[dict], action: str) -> str:
         message = data.get("message") if isinstance(data, dict) else None
         if status == 401:
-            return (
-                "Authentication failed — check your OpenSubtitles credentials "
-                "and API key."
-            )
+            return "Authentication failed — check your OpenSubtitles credentials."
         if status == 403:
-            return "Access forbidden (403) — the API key may be invalid."
+            return "Access forbidden (403) — OpenSubtitles rejected the request."
         if status == 404:
             return "Not found (404) — the resource may have been removed."
         if status == 429:
@@ -471,7 +450,14 @@ class OpenSubtitlesClient:
             stem = "subtitle"
         lang = raw.get("language") or "en"
         fmt = self._subtitle_format(raw.get("file_name") or "")
-        return Path(self.settings.download_dir) / f"{stem}.{lang}.{fmt}"
+        # save next to the video file when it is a real local file, so mpv
+        # auto-loads the matching external subtitle; otherwise (name search,
+        # remote/stream path) use the configured download directory
+        if video and video.path and os.path.isfile(video.path):
+            directory = Path(video.path).parent
+        else:
+            directory = Path(self.settings.download_dir)
+        return directory / f"{stem}.{lang}.{fmt}"
 
     @staticmethod
     def _gunzip(data: bytes) -> bytes:
@@ -528,10 +514,18 @@ class OpenSubtitlesClient:
                 encoding, errors="replace"
             )
 
-        directory = Path(self.settings.download_dir)
-        directory.mkdir(parents=True, exist_ok=True)
         path = self._output_path(query, video, raw)
-        path.write_bytes(payload)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.exists():
+            log.info("overwriting existing subtitle %s", path)
+        # write to a temp file then replace, so an interrupted download never
+        # leaves a truncated/corrupt file where a subtitle already exists
+        tmp = path.with_name(f".{path.name}.tmp")
+        try:
+            tmp.write_bytes(payload)
+            os.replace(tmp, path)
+        finally:
+            tmp.unlink(missing_ok=True)
         log.info("saved subtitle to %s", path)
         return str(path)
 
@@ -574,7 +568,10 @@ class OpenSubtitlesClient:
             message = str(exc)
             hint = (
                 CREDENTIALS_HINT
-                if "Authentication" in message or "Login failed" in message
+                if any(
+                    word in message.lower()
+                    for word in ("authentication", "login", "credential")
+                )
                 else None
             )
             log.warning("download failed: %s", message)

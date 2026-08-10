@@ -2,10 +2,10 @@
 
 A VLC-style subtitle downloader for **mpv**: a small native GTK4/Libadwaita
 popup that searches **OpenSubtitles.com** with their modern REST API (the
-same one the official VLSub extension uses), lets you pick a result,
-downloads it to `~/.local/share/mpv/subtitles/` and loads it into the
-running mpv over its JSON IPC socket — no OSD rendering, no web front-end,
-full keyboard navigation.
+same one the official VLSub extension uses), lets you pick a result and
+saves it **next to the video file** (so mpv auto-loads it), or loads it
+into the running mpv over its JSON IPC socket — no OSD rendering, no web
+front-end, full keyboard navigation.
 
 ![VLC-style workflow: search → pick → download → auto-loaded](screenshot.png)
 
@@ -15,8 +15,7 @@ full keyboard navigation.
 - GTK4 + Libadwaita with PyGObject (system packages — see `requirements.txt`)
 - mpv with `--input-ipc-server` support (the script sets it up for you)
 - `guessit` (pip) — everything else is the Python standard library
-- network access to `api.opensubtitles.com` (a free account is only needed
-  to download)
+- network access to `api.opensubtitles.com` (a free account is required)
 
 ## Install
 
@@ -63,9 +62,13 @@ scrolls for the rest:
   Subtitle Name column spanning the full width (with a **HI** badge for
   hearing-impaired releases). Rows highlight on hover;
   **double-click downloads immediately**.
-- **Download selection** — downloads the selected subtitle to
-  `~/.local/share/mpv/subtitles/`, loads it into mpv (`sub-add` + `sid`) and
-  shows a **Subtitle loaded.** toast.
+- **Download selection** — saves the subtitle **next to the video file**
+  when searching a local file (`<name>.<lang>.srt`, auto-loaded by mpv);
+  name searches without a local file fall back to the download directory
+  (`~/.local/share/mpv/subtitles/`). A file of the same name is overwritten
+  (atomically — an interrupted download never corrupts an existing
+  subtitle). Also loads it into mpv (`sub-add` + `sid`) and shows a
+  **Subtitle loaded.** toast.
 - **Show help / Show config** — key bindings and current settings.
 - **Close** — closes the popup.
 
@@ -114,14 +117,12 @@ popup, `subs /path/to/video.mkv` hash-searches a file).
 
 ## Downloading (credentials)
 
-The OpenSubtitles REST API needs an **Api-Key** on every request (this app
-defaults to the key shipped in the official VLSub extension — override it
-with your own free key from https://opensubtitles.com). Searching works
-anonymously; **downloading requires a free account.** Provide credentials
-as env vars:
+The OpenSubtitles REST API needs an **Api-Key** on every request; this app
+always uses the key shipped in the official VLSub extension. Every request
+also needs an account: the app logs in with your **username/password** on
+each start. Provide credentials as env vars:
 
 ```sh
-export OPENSUBTITLES_API_KEY=d3Sba6j6VYnty3ir5T8GXYoAuiLSBf0S   # optional
 export OPENSUBTITLES_USERNAME=you@example.com
 export OPENSUBTITLES_PASSWORD=secret
 ```
@@ -130,28 +131,32 @@ or in `~/.config/mpvui-subtitles/settings.json`:
 
 ```json
 {
-  "api_key": "…",
   "username": "you@example.com",
-  "password": "secret",
-  "token": "…"
+  "password_obfuscated": "…"
 }
 ```
 
-Env vars take precedence over the settings file. Instead of credentials you
-can also paste a **pre-issued session token** (grab one at
-https://opensubtitles.com) into the `token` field or the
-`OPENSUBTITLES_TOKEN` env var — it is used as-is on every request with no
-login round-trip, and takes precedence over username/password. Without any
-of these the app searches token-less (the API rejects credential-less
-logins, but an Api-Key alone is enough for searching) — downloads are
-refused with a hint until you configure an account.
+The password is never written in plaintext: it is obfuscated with a
+machine-local key (derived from `/etc/machine-id`) before saving, and
+decoded again on load. Because the key is tied to the machine, copying
+`settings.json` to another computer won't decode the password — just
+re-enter it via the **Account…** button. A legacy plaintext `password`
+entry is still read and migrated to `password_obfuscated` on the next save.
+
+Env vars take precedence over the settings file. The **Account…** dialog
+(also reachable from the bottom action bar) opens by itself on first run —
+when there is no `settings.json` yet — and whenever a search fails because
+credentials are missing or wrong. Saving valid credentials then re-runs the
+failed search automatically.
 
 ## Configuration
 
 The app stores its settings in
 `~/.config/mpvui-subtitles/settings.json` (last languages, sort mode +
-direction, download dir, encoding, window size, credentials). Change the
-download directory there if you want subtitles elsewhere.
+direction, download dir, encoding, window size, credentials). The download
+directory is only used as a fallback for searches without a local video
+file — subtitles for a file on disk are saved right next to it. Change it
+there if you want the fallback elsewhere.
 
 ## Notes
 

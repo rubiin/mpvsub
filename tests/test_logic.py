@@ -11,6 +11,8 @@ scoring / sorting / filtering helpers.
 
 from __future__ import annotations
 
+import base64
+import json
 import os
 import sys
 import tempfile
@@ -87,6 +89,81 @@ def test_settings_load_missing_file() -> None:
                 else:
                     os.environ[k] = v
         assert s.languages == ["en"]
+
+
+def test_settings_password_obfuscated_roundtrip() -> None:
+    """Password is persisted obfuscated (never plaintext) and round-trips."""
+    with tempfile.TemporaryDirectory() as tmp:
+        import settings as settings_mod
+
+        settings_mod.CONFIG_DIR = Path(tmp)
+        settings_mod.SETTINGS_FILE = Path(tmp) / "settings.json"
+        s = Settings(username="you@example.com", password="hunter2!secret")
+        s.save()
+
+        raw = settings_mod.SETTINGS_FILE.read_text(encoding="utf-8")
+        assert "hunter2!secret" not in raw
+        assert "password_obfuscated" in raw
+        assert '"password"' not in raw
+
+        loaded = Settings.load()
+        assert loaded.username == "you@example.com"
+        assert loaded.password == "hunter2!secret"
+
+
+def test_settings_legacy_plaintext_password_migrates() -> None:
+    """A legacy plaintext ``password`` key is read and obfuscated on save."""
+    with tempfile.TemporaryDirectory() as tmp:
+        import settings as settings_mod
+
+        settings_mod.CONFIG_DIR = Path(tmp)
+        settings_mod.SETTINGS_FILE = Path(tmp) / "settings.json"
+        settings_mod.SETTINGS_FILE.write_text(
+            json.dumps({"username": "u", "password": "legacy-plain"}),
+            encoding="utf-8",
+        )
+
+        loaded = Settings.load()
+        assert loaded.password == "legacy-plain"
+        loaded.save()
+
+        raw = settings_mod.SETTINGS_FILE.read_text(encoding="utf-8")
+        assert "legacy-plain" not in raw
+        assert "password_obfuscated" in raw
+        assert Settings.load().password == "legacy-plain"
+
+
+def test_settings_foreign_or_corrupt_obfuscation_yields_empty() -> None:
+    """An obfuscated value from another machine (or corrupted) reads as ""."""
+    with tempfile.TemporaryDirectory() as tmp:
+        import settings as settings_mod
+
+        settings_mod.CONFIG_DIR = Path(tmp)
+        settings_mod.SETTINGS_FILE = Path(tmp) / "settings.json"
+        # a zero key makes XOR the identity, so the stored bytes are the raw
+        # payload — simulate a foreign key with bytes that aren't valid UTF-8
+        settings_mod._machine_key_cache = b"\x00" * 32
+        try:
+            settings_mod.SETTINGS_FILE.write_text(
+                json.dumps(
+                    {
+                        "password_obfuscated": base64.urlsafe_b64encode(
+                            b"\xff\xfe\xfd\xfc"
+                        ).decode("ascii"),
+                    }
+                ),
+                encoding="utf-8",
+            )
+            assert Settings.load().password == ""
+
+            # corrupt base64 also degrades to ""
+            settings_mod.SETTINGS_FILE.write_text(
+                json.dumps({"password_obfuscated": "### not base64 ###"}),
+                encoding="utf-8",
+            )
+            assert Settings.load().password == ""
+        finally:
+            settings_mod._machine_key_cache = None
 
 
 def test_cache_ttl() -> None:

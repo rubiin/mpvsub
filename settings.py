@@ -7,9 +7,12 @@ folder between runs.
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import logging
 import os
+import socket
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -56,6 +59,61 @@ SORT_MODES: tuple[tuple[str, str, Optional[str]], ...] = (
 )
 
 
+#: constant mixed into the obfuscation key so the same machine-id never
+#: yields the same bytes as another app using this scheme
+_OBFUSCATION_PEPPER = b"mpvui-subtitles:v1"
+_machine_key_cache: Optional[bytes] = None
+
+
+def _machine_key() -> bytes:
+    """Machine-local key for password obfuscation (cached).
+
+    Derived from ``/etc/machine-id`` (fallback: hostname).  Tying the key to
+    the machine means a copied settings.json can't be decoded elsewhere —
+    the password just needs re-entering on the new machine.
+    """
+    global _machine_key_cache
+    if _machine_key_cache is None:
+        try:
+            machine_id = Path("/etc/machine-id").read_text(encoding="utf-8").strip()
+        except OSError:
+            machine_id = socket.gethostname()
+        _machine_key_cache = hashlib.sha256(
+            _OBFUSCATION_PEPPER + machine_id.encode("utf-8")
+        ).digest()
+    return _machine_key_cache
+
+
+def _obfuscate(text: str) -> str:
+    """XOR-obfuscate *text* with the machine key; base64-encoded, no padding."""
+    if not text:
+        return ""
+    key = _machine_key()
+    data = text.encode("utf-8")
+    xored = bytes(b ^ key[i % len(key)] for i, b in enumerate(data))
+    return base64.urlsafe_b64encode(xored).decode("ascii").rstrip("=")
+
+
+def _deobfuscate(code: str) -> str:
+    """Inverse of :func:`_obfuscate`; returns "" on any decode failure.
+
+    A value obfuscated on another machine (different key) or corrupted in
+    the file decodes to garbage bytes; strict UTF-8 decoding rejects those
+    so the password degrades to "" (re-enter it) instead of mojibake.
+    """
+    if not code:
+        return ""
+    key = _machine_key()
+    try:
+        padded = code + "=" * (-len(code) % 4)
+        xored = base64.urlsafe_b64decode(padded)
+        return bytes(b ^ key[i % len(key)] for i, b in enumerate(xored)).decode(
+            "utf-8"
+        )
+    except (ValueError, TypeError, UnicodeDecodeError):
+        return ""
+
+
 def system_language() -> str:
     """Best-effort default subtitle language from the user's locale.
 
@@ -87,27 +145,28 @@ class Settings:
     encoding: str = "utf-8"
     timeout: float = 20.0
 
-    #: OpenSubtitles.com credentials (also read from the OPENSUBTITLES_API_KEY
-    #: / _USERNAME / _PASSWORD environment variables, which take precedence).
-    #: Leave api_key empty to use the default key shipped in the reference
-    #: VLSub extension.
-    api_key: str = ""
+    #: OpenSubtitles.com credentials (also read from the OPENSUBTITLES_USERNAME
+    #: / OPENSUBTITLES_PASSWORD environment variables, which take precedence).
+    #: Every request needs an account: the client logs in with username +
+    #: password on each start, using the default Api-Key shipped in the
+    #: reference VLSub extension.
+    #:
+    #: ``username`` is stored in plaintext; ``password`` is kept in memory as
+    #: plaintext but persisted obfuscated (``password_obfuscated`` in the JSON)
+    #: with a machine-local key — see :func:`_obfuscate`.
     username: str = ""
     password: str = ""
-
-    #: Pre-issued session token (grab one at https://opensubtitles.com).  When
-    #: set it is used as-is on every request — no login round-trip — and takes
-    #: precedence over username/password.  Overridable with the
-    #: OPENSUBTITLES_TOKEN environment variable.
-    token: str = ""
 
     # -- persistence --------------------------------------------------------
 
     def save(self) -> None:
+        data = asdict(self)
+        data.pop("password", None)
+        data["password_obfuscated"] = _obfuscate(self.password)
         try:
             CONFIG_DIR.mkdir(parents=True, exist_ok=True)
             SETTINGS_FILE.write_text(
-                json.dumps(asdict(self), indent=2, ensure_ascii=False),
+                json.dumps(data, indent=2, ensure_ascii=False),
                 encoding="utf-8",
             )
         except OSError as exc:  # pragma: no cover - best effort only
@@ -119,6 +178,10 @@ class Settings:
             data = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return cls()
+        if "password_obfuscated" in data:
+            data["password"] = _deobfuscate(str(data.pop("password_obfuscated") or ""))
+        # else: a legacy plaintext "password" key is kept as-is; the next
+        # save() migrates it to the obfuscated form
         known = {f.name for f in cls.__dataclass_fields__.values()}
         kwargs = {k: v for k, v in data.items() if k in known}
         return cls(**kwargs)

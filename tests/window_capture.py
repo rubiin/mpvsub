@@ -5,8 +5,9 @@ Used to regenerate the README screenshot:
 
     GDK_BACKEND=x11 DISPLAY=:0 python3 tests/window_capture.py shot.png
 
-Fetches results live from api.opensubtitles.com — no sample data. If the
-API returns nothing (or the search fails), the window shows its empty
+Fetches results live from api.opensubtitles.com — no sample data. The API
+requires an account for every request now, so set OPENSUBTITLES_USERNAME /
+OPENSUBTITLES_PASSWORD (env vars) or it falls back to the empty
 ("No subtitles found.") state and that is what gets captured.
 
 Requires an X11 display and ImageMagick's `import`.

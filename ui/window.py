@@ -28,9 +28,10 @@ from search import (
     video_from_path,
 )
 from opensubtitles_client import OpenSubtitlesClient
-from settings import Settings
+from settings import SETTINGS_FILE, Settings
 from ui.dialogs import (
     show_config_dialog,
+    show_credentials_dialog,
     show_error_dialog,
     show_help_dialog,
 )
@@ -131,12 +132,15 @@ class SubtitleWindow(Adw.ApplicationWindow):
         self._debounce_id = 0
         self._searched_path: Optional[str] = None
         self._alive = True
+        self._credentials_dialog_open = False
+        self._startup_prompt_done = False
 
         self._install_css()
         self._build_ui()
         self._install_shortcuts()
         self._connect_mpv()
         self.apply_cli(cli)
+        self.connect("map", self._on_mapped)
         self.connect("destroy", self._on_destroy)
 
     # ------------------------------------------------------------------
@@ -208,6 +212,9 @@ class SubtitleWindow(Adw.ApplicationWindow):
         btn_config.connect(
             "clicked", lambda *_: show_config_dialog(self, self.settings)
         )
+        btn_account = Gtk.Button(label="Account…")
+        btn_account.set_tooltip_text("Set your OpenSubtitles username/password")
+        btn_account.connect("clicked", lambda *_: self._open_credentials())
         self.btn_download = Gtk.Button(label="Download selection")
         self.btn_download.add_css_class("suggested-action")
         self.btn_download.set_sensitive(False)
@@ -216,6 +223,7 @@ class SubtitleWindow(Adw.ApplicationWindow):
         btn_close.connect("clicked", lambda *_: self.close())
         action_bar.pack_start(btn_help)
         action_bar.pack_start(btn_config)
+        action_bar.pack_start(btn_account)
         action_bar.pack_end(btn_close)
         action_bar.pack_end(self.btn_download)
         root.append(action_bar)
@@ -596,9 +604,54 @@ class SubtitleWindow(Adw.ApplicationWindow):
     def _show_search_error(self, exc: Exception) -> None:
         message = str(exc) or exc.__class__.__name__
         log.warning("search error: %s", message)
+        if any(w in message.lower() for w in ("credential", "login")):
+            message = (
+                f"{message}\n\nEnter your username/password via the "
+                "Account… button."
+            )
+            self._open_credentials()
         self._show_banner(message)
         self._error_page.set_description(message)
         self.stack.set_visible_child_name("error")
+
+    # ------------------------------------------------------------------
+    # credentials prompting
+    # ------------------------------------------------------------------
+
+    def _has_credentials(self) -> bool:
+        return bool(
+            os.environ.get("OPENSUBTITLES_USERNAME")
+            or os.environ.get("OPENSUBTITLES_PASSWORD")
+            or self.settings.username
+            or self.settings.password
+        )
+
+    def _on_mapped(self, *_args) -> None:
+        GLib.idle_add(self._maybe_show_startup_credentials)
+
+    def _maybe_show_startup_credentials(self) -> None:
+        if self._startup_prompt_done:
+            return
+        self._startup_prompt_done = True
+        # first run: no settings file yet and no credentials anywhere — ask
+        if not SETTINGS_FILE.exists() and not self._has_credentials():
+            self._open_credentials()
+
+    def _open_credentials(self) -> None:
+        if self._credentials_dialog_open:
+            return  # already showing (e.g. startup prompt + failing search)
+        self._credentials_dialog_open = True
+
+        def on_saved() -> None:
+            self._toast("Account saved.")
+            # a credentials error may have failed the last search — retry it
+            if self.stack.get_visible_child_name() == "error":
+                self._retry_last_search()
+
+        dialog = show_credentials_dialog(self, self.settings, on_saved=on_saved)
+        dialog.connect(
+            "closed", lambda *_: setattr(self, "_credentials_dialog_open", False)
+        )
 
     def _retry_last_search(self) -> None:
         self._show_banner("")

@@ -10,7 +10,7 @@ Covers the behaviour ported from the official VLSub extension
   languages, order_by/order_direction
 * result mapping from the API ``attributes`` payload
 * empty hash search -> name search fallback
-* login + bearer-token caching, 401 re-login retry, anonymous degradation
+* login + bearer-token caching, 401 re-login retry, missing-credentials error
 * the download pipeline: POST /download (file_id as string) -> GET link ->
   gunzip -> save with ``<video>.<lang>.<format>`` naming + encoding
 * the async wrappers and their error/timeout mapping
@@ -36,10 +36,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # keep the tests hermetic regardless of the caller's environment
 for _k in (
-    "OPENSUBTITLES_API_KEY",
     "OPENSUBTITLES_USERNAME",
     "OPENSUBTITLES_PASSWORD",
-    "OPENSUBTITLES_TOKEN",
 ):
     os.environ.pop(_k, None)
 
@@ -168,17 +166,19 @@ class FakeHttp:
 
 
 def _client(tmp: str, **settings_overrides) -> tuple[OpenSubtitlesClient, FakeHttp]:
+    """Client with credentials, so the login/401 paths run like in production."""
+    kwargs = {
+        "username": "you@example.com",
+        "password": "secret",
+        **settings_overrides,
+    }
     client = OpenSubtitlesClient(
-        Settings(download_dir=tmp, **settings_overrides), SearchCache()
+        Settings(download_dir=tmp, **kwargs),
+        SearchCache(),
     )
     fake = FakeHttp()
     client._http_request = fake  # type: ignore[method-assign]
     return client, fake
-
-
-def _client_with_account(tmp: str, **overrides) -> tuple[OpenSubtitlesClient, FakeHttp]:
-    """Client with credentials, so the login/401 paths run like in production."""
-    return _client(tmp, username="you@example.com", password="secret", **overrides)
 
 
 def _episode_query() -> SearchQuery:
@@ -398,7 +398,7 @@ def test_empty_hash_search_falls_back_to_name() -> None:
 
 def test_login_token_cached_across_searches() -> None:
     with tempfile.TemporaryDirectory() as tmp:
-        client, fake = _client_with_account(tmp)
+        client, fake = _client(tmp)
         fake.search_items = [_subtitle_item()]
         client._search_sync(_episode_query(), None)
         client._search_sync(
@@ -413,7 +413,7 @@ def test_login_token_cached_across_searches() -> None:
 
 def test_401_triggers_relogin_and_retry() -> None:
     with tempfile.TemporaryDirectory() as tmp:
-        client, fake = _client_with_account(tmp)
+        client, fake = _client(tmp)
         fake.search_items = [_subtitle_item()]
         fake.unauthorized_times(1)
 
@@ -425,47 +425,18 @@ def test_401_triggers_relogin_and_retry() -> None:
         assert len(fake.calls_for("/login", "POST")) == 2
 
 
-def test_preset_token_used_without_login() -> None:
-    """A configured token is sent as-is; no login round-trip happens."""
+def test_missing_credentials_raises() -> None:
+    """No username/password -> clear error, no anonymous mode."""
     with tempfile.TemporaryDirectory() as tmp:
-        client, fake = _client(tmp, token="tok-preset-1")
-        fake.search_items = [_subtitle_item()]
-
-        results = client._search_sync(_episode_query(), None)
-
-        assert len(results) == 1
-        assert len(fake.calls_for("/login", "POST")) == 0
-        headers = fake.calls_for("/subtitles")[0][2]
-        assert headers.get("Authorization") == "Bearer tok-preset-1"
-
-
-def test_preset_token_from_env_wins_over_settings() -> None:
-    with tempfile.TemporaryDirectory() as tmp:
-        os.environ["OPENSUBTITLES_TOKEN"] = "tok-env-2"
+        client, fake = _client(tmp, username="", password="")
         try:
-            client, fake = _client(tmp, token="tok-settings-2")
-            fake.search_items = [_subtitle_item()]
             client._search_sync(_episode_query(), None)
-            headers = fake.calls_for("/subtitles")[0][2]
-            assert headers.get("Authorization") == "Bearer tok-env-2"
+        except RuntimeError as exc:
+            assert "credentials" in str(exc).lower()
             assert len(fake.calls_for("/login", "POST")) == 0
-        finally:
-            os.environ.pop("OPENSUBTITLES_TOKEN", None)
-
-
-def test_anonymous_access_is_tokenless() -> None:
-    """No credentials -> no login attempt at all, Api-Key-only requests."""
-    with tempfile.TemporaryDirectory() as tmp:
-        client, fake = _client(tmp)
-        fake.search_items = [_subtitle_item()]
-
-        results = client._search_sync(_episode_query(), None)
-
-        assert len(results) == 1
-        assert len(fake.calls_for("/login", "POST")) == 0
-        search_headers = fake.calls_for("/subtitles")[0][2]
-        assert "Authorization" not in search_headers
-        assert search_headers.get("Api-Key")
+            assert len(fake.calls_for("/subtitles")) == 0
+        else:
+            raise AssertionError("expected RuntimeError without credentials")
 
 
 # ---------------------------------------------------------------------------
@@ -475,7 +446,7 @@ def test_anonymous_access_is_tokenless() -> None:
 
 def test_download_flow_writes_named_file() -> None:
     with tempfile.TemporaryDirectory() as tmp:
-        client, fake = _client_with_account(tmp)
+        client, fake = _client(tmp)
         video = VideoInfo(path="/x/The.Big.Bang.Theory.S05E18.mkv",
                           filename="The.Big.Bang.Theory.S05E18.mkv", title="TBBT")
         sub = _raw_result()
@@ -504,6 +475,36 @@ def test_download_no_video_uses_query_title_for_name() -> None:
         result = asyncio.run(client.download(_raw_result(), None, _episode_query()))
         assert result.ok is True
         assert Path(result.path or "").name == "The_Big_Bang_Theory.en.srt"
+
+
+def test_download_overwrites_existing_file() -> None:
+    """A subtitle already at the target path is replaced, not skipped."""
+    with tempfile.TemporaryDirectory() as tmp:
+        client, fake = _client(tmp)
+        target = Path(tmp) / "The_Big_Bang_Theory.en.srt"
+        target.write_text("stale subtitle", encoding="utf-8")
+
+        result = asyncio.run(client.download(_raw_result(), None, _episode_query()))
+
+        assert result.ok is True
+        assert target.read_bytes() == SUBTITLE_CONTENT
+
+
+def test_download_saves_next_to_video_file() -> None:
+    """With a real local video, the subtitle lands beside it, not in the
+    configured download dir (so mpv auto-loads the external track)."""
+    with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as dl:
+        video_path = Path(tmp) / "Show.mkv"
+        video_path.write_bytes(b"\x00" * 1024)
+        client, fake = _client(dl)
+        video = VideoInfo(path=str(video_path), filename="Show.mkv", title="Show")
+
+        result = asyncio.run(client.download(_raw_result(), video, _episode_query()))
+
+        assert result.ok is True
+        assert result.path == str(Path(tmp) / "Show.en.srt")
+        assert Path(result.path).exists()
+        assert not (Path(dl) / "Show.en.srt").exists()
 
 
 def test_download_missing_raw_raises() -> None:
