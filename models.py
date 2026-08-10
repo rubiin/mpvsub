@@ -15,10 +15,8 @@ from typing import Any, Optional
 # language catalog
 # ---------------------------------------------------------------------------
 
-#: Language picker — OpenSubtitles REST API code → display name.  This is the
-#: ``sub_languages`` list shipped with the official VLSub extension
-#: (vlsub-opensubtitles-com), i.e. the codes the ``languages`` search
-#: parameter accepts (``en``, ``fr``, ``pt-br``, ``zh-cn``, …).
+#: Language picker — OpenSubtitles code → display name (the values the
+#: API's ``languages`` parameter accepts, ``en``, ``pt-br``, ``zh-cn``, …).
 LANGUAGE_CATALOG: dict[str, str] = {
     "ab": "Abkhazian",
     "af": "Afrikaans",
@@ -121,8 +119,7 @@ LANGUAGE_CATALOG: dict[str, str] = {
     "cy": "Welsh",
 }
 
-#: Flag emoji for the subset of the catalog that has one (rows / results);
-#: languages without a flag render name-only.
+#: Flag emoji per language; entries without one render name-only.
 LANGUAGE_FLAGS: dict[str, str] = {
     "ar": "🇸🇦", "hy": "🇦🇲", "eu": "🇪🇸", "bn": "🇧🇩", "bs": "🇧🇦",
     "my": "🇲🇲", "ca": "🇪🇸", "zh-ca": "🇭🇰", "zh-cn": "🇨🇳", "zh-tw": "🇹🇼",

@@ -43,10 +43,8 @@ SUBTITLE_DIR = Path.home() / ".local/share" / "mpv" / "subtitles"
 
 SETTINGS_FILE = CONFIG_DIR / "settings.json"
 
-#: sort modes — (settings key, dropdown label, API ``order_by`` field).  The
-#: API field list mirrors the official VLSub extension's sort options; a
-#: ``None`` API field means "best match" (client-side scoring, no server
-#: ordering).  Dropdown order must match this order in the UI.
+#: sort modes — (key, dropdown label, API ``order_by`` field;
+#: ``None`` = client-side best match). UI order must match this.
 SORT_MODES: tuple[tuple[str, str, Optional[str]], ...] = (
     ("score", "Best match", None),
     ("downloads", "Downloads", "download_count"),
@@ -67,11 +65,10 @@ _machine_key_cache: Optional[bytes] = None
 
 
 def _machine_key() -> bytes:
-    """Machine-local key for password obfuscation (cached).
+    """Machine-local obfuscation key (cached).
 
-    Derived from ``/etc/machine-id`` (fallback: hostname).  Tying the key to
-    the machine means a copied settings.json can't be decoded elsewhere —
-    the password just needs re-entering on the new machine.
+    From ``/etc/machine-id`` (hostname fallback), so a copied settings.json
+    can't be decoded on another machine — just re-enter the password.
     """
     global _machine_key_cache
     if _machine_key_cache is None:
@@ -96,11 +93,8 @@ def _obfuscate(text: str) -> str:
 
 
 def _deobfuscate(code: str) -> str:
-    """Inverse of :func:`_obfuscate`; returns "" on any decode failure.
-
-    A value obfuscated on another machine (different key) or corrupted in
-    the file decodes to garbage bytes; strict UTF-8 decoding rejects those
-    so the password degrades to "" (re-enter it) instead of mojibake.
+    """Inverse of :func:`_obfuscate`; returns "" on any decode failure
+    (foreign key or corrupt data) rather than showing mojibake.
     """
     if not code:
         return ""
@@ -116,11 +110,7 @@ def _deobfuscate(code: str) -> str:
 
 
 def system_language() -> str:
-    """Best-effort default subtitle language from the user's locale.
-
-    Maps the LANG/LC_MESSAGES language code onto the picker catalog;
-    falls back to English for unset/POSIX locales and unknown codes.
-    """
+    """Default subtitle language from the user's locale; English fallback."""
     raw = (
         os.environ.get("LC_ALL")
         or os.environ.get("LC_MESSAGES")
@@ -146,15 +136,10 @@ class Settings:
     encoding: str = "utf-8"
     timeout: float = 20.0
 
-    #: OpenSubtitles.com credentials (also read from the OPENSUBTITLES_USERNAME
-    #: / OPENSUBTITLES_PASSWORD environment variables, which take precedence).
-    #: Every request needs an account: the client logs in with username +
-    #: password on each start, using the default Api-Key shipped in the
-    #: reference VLSub extension.
-    #:
-    #: ``username`` is stored in plaintext; ``password`` is kept in memory as
-    #: plaintext but persisted obfuscated (``password_obfuscated`` in the JSON)
-    #: with a machine-local key — see :func:`_obfuscate`.
+    #: OpenSubtitles credentials. Env vars (OPENSUBTITLES_USERNAME /
+    #: OPENSUBTITLES_PASSWORD) take precedence; every request needs an
+    #: account. ``username`` is stored in plaintext, ``password`` is
+    #: persisted obfuscated (``password_obfuscated``) — see :func:`_obfuscate`.
     username: str = ""
     password: str = ""
 
@@ -181,8 +166,7 @@ class Settings:
             return cls()
         if "password_obfuscated" in data:
             data["password"] = _deobfuscate(str(data.pop("password_obfuscated") or ""))
-        # else: a legacy plaintext "password" key is kept as-is; the next
-        # save() migrates it to the obfuscated form
+        # legacy plaintext "password" migrates to the obfuscated form on next save
         known = {f.name for f in cls.__dataclass_fields__.values()}
         kwargs = {k: v for k, v in data.items() if k in known}
         return cls(**kwargs)

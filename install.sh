@@ -2,27 +2,16 @@
 #
 # install.sh — one-shot installer for the mpv subtitle downloader.
 #
-# Remote install:
-#
 #     curl -fsSL https://raw.githubusercontent.com/rubiin/mpvsub/master/install.sh | bash
+#     bash install.sh                            # from a checkout
 #
-# Local install (from a git clone / checkout of this repo):
+# Fetches the source (clones $REPO_URL, or uses the current checkout),
+# creates a venv with --system-site-packages (GTK4 bindings come from the
+# system), installs guessit, copies mpvsub.lua to the mpv scripts folder
+# and writes script-opts/mpvsub.conf pointing at the installed files.
 #
-#     bash install.sh
-#
-# What it does:
-#   1. fetches the source — clones $REPO_URL, or uses the current directory
-#      when run from a checkout (local mode)
-#   2. creates a venv with --system-site-packages (PyGObject/GTK4 come from
-#      the system), installs the pip dependency (guessit)
-#   3. copies mpvsub.lua into ~/.config/mpv/scripts/
-#   4. writes ~/.config/mpv/script-opts/mpvsub.conf pointing at the
-#      installed main.py + venv python
-#
-# Environment overrides:
-#     MPVSUB_REPO_URL  git URL to clone           (default: REPO_URL below)
-#     MPVSUB_DIR       install directory          (default: ~/mpvsub)
-#     XDG_CONFIG_HOME mpv config root            (default: ~/.config)
+# Overrides: MPVSUB_REPO_URL (clone URL), MPVSUB_DIR (install dir, default
+# ~/mpvsub), XDG_CONFIG_HOME (mpv config root).
 set -euo pipefail
 
 REPO_URL="${MPVSUB_REPO_URL:-https://github.com/rubiin/mpvsub}"

@@ -1,10 +1,6 @@
-"""The main window.
-
-Layout mirrors the classic subtitle-downloader dialog: a labelled search
-form on top (language + Search by hash, Title + Search by name, Season and
-Episode), a scrollable results list in the middle (~5-6 rows visible), and
-Show help / Show config / Download selection / Close at the bottom.  All
-network work runs on the asyncio thread via :class:`AsyncRunner`.
+"""The main window: labelled search form on top, scrollable results list
+in the middle, action bar (help/config/account/download/close) at the
+bottom. Network work runs on an asyncio thread via :class:`AsyncRunner`.
 """
 
 from __future__ import annotations
@@ -111,7 +107,7 @@ class SubtitleWindow(Adw.ApplicationWindow):
             default_width=cli.width if cli and cli.width else 700,
             default_height=cli.height if cli and cli.height else 500,
         )
-        # fixed size like the reference dialog: the results list scrolls
+        # fixed size, like the reference dialog; the results list scrolls
         self.set_resizable(False)
         self.settings = settings
         self._cli = cli
@@ -374,10 +370,8 @@ class SubtitleWindow(Adw.ApplicationWindow):
     def _prefill_form(self, video: VideoInfo) -> None:
         """Sync Title/Season/Episode to the current media.
 
-        The Title field shows the full media file name (extension kept);
-        guessit's parsed title is still used for the search itself.
-        User-typed titles are preserved, otherwise the fields follow the
-        media so they are never stale or empty while mpv is playing.
+        The Title field shows the full file name; guessit's parsed title is
+        still what the search uses. User-typed titles are left alone.
         """
         title = video.filename
         if video.kind == "episode" and video.season is not None:

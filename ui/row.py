@@ -1,8 +1,4 @@
-"""Cell widget builders for the results list rows.
-
-Each function returns the widget construction + bind steps used by the
-:class:`~ui.result_list.ResultList` column factories.
-"""
+"""Cell builders for the results list rows."""
 
 from __future__ import annotations
 
@@ -38,10 +34,8 @@ def _bind_label(list_item, text: str) -> None:
 
 
 def name_cell() -> tuple[Gtk.SignalListItemFactory, Callable]:
-    """Subtitle name column with optional hearing-impaired badge.
-
-    Names longer than 70 characters are truncated with a trailing ellipsis
-    so every row stays on one line without GTK's mid-text ellipsizing.
+    """Subtitle name column with an optional HI badge; names over 70 chars
+    are ellipsized so rows stay on one line.
     """
 
     def setup(list_item) -> None:

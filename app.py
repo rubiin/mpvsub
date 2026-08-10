@@ -1,8 +1,6 @@
-"""The Adw.Application — single instance, HANDLES_COMMAND_LINE.
+"""Single-instance Adw.Application (HANDLES_COMMAND_LINE).
 
-When the mpv script launches the app again (new socket / new file), the
-command line is delivered to the already-running instance via
-``do_command_line``, so only one window ever exists.
+A second launch from mpv (new socket/file) just re-targets the one window.
 """
 
 from __future__ import annotations
@@ -43,8 +41,7 @@ class SubtitleApp(Adw.Application):
                 application=self, settings=Settings.load(), cli=self._cli
             )
         elif self._cli is not None:
-            # a second launch (e.g. new mpv socket/file) re-targets the
-            # already-running window
+            # relaunch from mpv: re-target the existing window
             self.window.apply_cli(self._cli)
         self.window.present()
 

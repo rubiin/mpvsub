@@ -1,6 +1,4 @@
-"""Small dialogs used by the main window: the error dialog, the "Show
-help" / "Show config" info dialogs and the account credentials dialog.
-"""
+"""Small dialogs: error, help, config, and the account credentials dialog."""
 
 from __future__ import annotations
 
@@ -63,11 +61,10 @@ def show_credentials_dialog(
     settings: Settings,
     on_saved: Callable[[], None],
 ) -> None:
-    """Let the user enter their OpenSubtitles username/password.
+    """Ask for OpenSubtitles username/password; saves to *settings* on Save.
 
-    Saves to *settings* (persisted to settings.json) on Save, then calls
-    *on_saved*.  Widgets are built fresh per open because the alert dialog
-    takes ownership of its extra child and destroys it on close.
+    Widgets are rebuilt per open because the alert dialog takes ownership
+    of its extra child and destroys it on close.
     """
     dialog = Adw.AlertDialog.new(
         "OpenSubtitles account",

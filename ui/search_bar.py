@@ -180,10 +180,8 @@ class SearchForm(Gtk.Grid):
     def sync_to_media(
         self, title: str, season: Optional[int], episode: Optional[int]
     ) -> None:
-        """Update the fields to match the currently playing media.
-
-        If the user has typed their own title, the fields are left alone so
-        their manual search isn't clobbered by mpv media changes.
+        """Follow the currently playing media — unless the user typed
+        their own title, which we don't clobber.
         """
         current = self.title_entry.get_text().strip()
         if current and current != self._last_auto_title:

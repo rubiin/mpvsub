@@ -35,8 +35,8 @@ def main(argv: list[str]) -> int:
     logging.getLogger("PIL").setLevel(logging.WARNING)
 
     app = SubtitleApp()
-    # pass argv explicitly: run(None) delivers an *empty* command line to
-    # do_command_line, which would drop --socket/--file
+    # run(None) would hand GApplication an empty argv; pass ours so
+    # --socket/--file survive
     return app.run(sys.argv)
 
 

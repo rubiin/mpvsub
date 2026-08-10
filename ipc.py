@@ -1,13 +1,8 @@
-"""mpv JSON IPC client.
+"""mpv JSON IPC client over its ``--input-ipc-server`` unix socket.
 
-Talks to mpv over its ``--input-ipc-server`` unix socket using the JSON IPC
-protocol.  The client runs entirely on the asyncio loop thread; UI callbacks
-(`on_connect`, `on_disconnect`, property observers) are invoked from that
-thread, so the window wraps them in ``GLib.idle_add`` before touching GTK.
-
-Supported operations: current path / media-title / track-list, observing
-property changes (live media tracking) and ``sub-add`` + ``sid`` selection
-for loading downloaded subtitles.
+Runs on the asyncio loop thread; the window wraps its callbacks in
+``GLib.idle_add`` before touching GTK. Supports property observation
+(live media tracking) and ``sub-add`` for downloaded subtitles.
 """
 
 from __future__ import annotations
@@ -51,7 +46,7 @@ class MpvClient:
     # -- lifecycle ----------------------------------------------------------
 
     def start(self, loop: asyncio.AbstractEventLoop) -> None:
-        """Begin the reconnect loop on *loop* (call from any thread)."""
+        """Start the reconnect loop on *loop* (thread-safe)."""
         if self._task is not None and not self._task.done():
             return
         self._loop = loop
@@ -204,10 +199,10 @@ class MpvClient:
         return await self.command(["set_property", name, value])
 
     async def sub_add(self, path: str) -> Optional[int]:
-        """Add an external subtitle file; returns its track id when known.
+        """Add an external subtitle; return its track id when known.
 
-        Note: ``sub-add <url> [flags] [title]`` — the second positional is a
-        *flags* string on modern mpv, so a title must not be passed here.
+        Careful: on modern mpv the second positional of ``sub-add`` is a
+        *flags* string, so no title may be passed.
         """
         data = await self.command(["sub-add", path])
         try:

@@ -1,26 +1,15 @@
-"""OpenSubtitles.com REST API v1 client (no subliminal, stdlib only).
+"""OpenSubtitles REST API v1 client (stdlib only, ported from the official
+VLSub extension minus its i18n and VLC-UI code):
 
-Replaces the subliminal-based backend with a direct client for the modern
-OpenSubtitles REST API (``https://api.opensubtitles.com/api/v1``), ported
-from the official VLSub extension for VLC
-(``opensubtitles/vlsub-opensubtitles-com``) minus its i18n and VLC-UI code:
-
-* ``POST /login``        -> bearer token (registered account only — the API
-                            rejects credential-less logins), cached for 24 h;
-                            ``401`` responses trigger a re-login + retry
-* ``GET  /subtitles``    -> search by ``moviehash``+``moviebytesize`` or by
-                            ``query`` / ``imdb_id`` / ``season_number`` /
-                            ``episode_number``, with ``languages``,
-                            ``order_by`` and ``order_direction``
-* ``POST /download``     -> ``{file_id}`` -> ``{link, remaining, …}``; the
-                            link serves gzipped subtitle content
+* ``POST /login``    -> 24 h bearer token; ``401`` triggers re-login + retry
+* ``GET /subtitles`` -> hash or query/imdb/season/episode search
+* ``POST /download`` -> ``{file_id}`` -> ``{link, remaining}``; the link
+                        serves gzipped subtitle content
 * empty hash searches fall back to a name search, like the extension
 
-Only the stdlib (``urllib``) is used; all network work runs inside
-``asyncio.to_thread`` so the GTK main loop never blocks.  Credentials are
-read from ``OPENSUBTITLES_USERNAME`` / ``OPENSUBTITLES_PASSWORD`` (or the
-app settings); the Api-Key is fixed to the one shipped in the reference
-VLSub extension.
+Network work runs in ``asyncio.to_thread`` so the GTK loop never blocks.
+Credentials come from env vars or the app settings; the Api-Key is the one
+shipped in the reference VLSub extension.
 """
 
 from __future__ import annotations
@@ -60,10 +49,10 @@ API_BASE = "https://api.opensubtitles.com/api/v1"
 USER_AGENT = "VLSub OpenSubtitles.com v1.2.9"
 
 
-#: how long a login token is considered valid (the extension uses 24 h)
+#: login token validity (same 24 h the extension uses)
 TOKEN_TTL_SECONDS = 24 * 60 * 60
 
-#: transient statuses worth retrying — server overloaded / rate limited
+#: transient statuses worth a retry
 _TRANSIENT_STATUSES = {503, 429}
 
 #: seconds to sleep between download retries (attempt 1, attempt 2)
@@ -159,10 +148,10 @@ class OpenSubtitlesClient:
     # -- session ------------------------------------------------------------
 
     def _ensure_token(self) -> str:
-        """Return a valid bearer token, logging in when needed/expired.
+        """Return a valid token, logging in when expired.
 
-        Credentials (username/password) are required for every request — there
-        is no anonymous mode.  A failed login raises so the user sees why.
+        Credentials are mandatory — there's no anonymous mode — and a failed
+        login raises so the user sees why.
         """
         username, password = self._credentials()
         if not username or not password:
@@ -270,7 +259,7 @@ class OpenSubtitlesClient:
             method, url, headers=headers, body=body, timeout=timeout
         )
         if status == 401:
-            # token expired: clear it, re-login and retry once
+            # token expired — re-login and retry once
             self._token, self._token_expires = None, 0.0
             headers = self._auth_headers(extra)
             status, data, raw = self._request_json(
@@ -405,12 +394,10 @@ class OpenSubtitlesClient:
     def _post_download_with_retry(
         self, body: bytes
     ) -> tuple[int, Optional[dict], bytes]:
-        """POST /download, retrying transient errors (503/429) with backoff.
+        """POST /download, retrying 503/429 with a short backoff.
 
-        OpenSubtitles' download service periodically answers 503 from its
-        load balancer (it is not an auth problem).  Retry a couple of times
-        with a short backoff before surfacing the error — the same spirit
-        as the reference extension's retry setting.
+        OpenSubtitles' load balancer 503s periodically — it's not an auth
+        problem, so retry a couple of times before surfacing the error.
         """
         status, data, raw = 0, None, b""
         attempts = len(self._download_retry_backoff) + 1
@@ -450,9 +437,8 @@ class OpenSubtitlesClient:
             stem = "subtitle"
         lang = raw.get("language") or "en"
         fmt = self._subtitle_format(raw.get("file_name") or "")
-        # save next to the video file when it is a real local file, so mpv
-        # auto-loads the matching external subtitle; otherwise (name search,
-        # remote/stream path) use the configured download directory
+        # beside the video when it's a real local file (mpv auto-loads it),
+        # otherwise the configured download directory
         if video and video.path and os.path.isfile(video.path):
             directory = Path(video.path).parent
         else:
@@ -483,9 +469,7 @@ class OpenSubtitlesClient:
             (raw.get("file_name") or sub.name or "")[:90],
         )
 
-        # POST /download — file_id as a *string* (avoids scientific notation
-        # for large ids, like the reference implementation); transient server
-        # errors (503/429) are retried with backoff
+        # file_id as a string: avoids scientific notation for large ids
         body = json.dumps({"file_id": str(raw["file_id"])}).encode("utf-8")
         status, data, _raw = self._post_download_with_retry(body)
         if status != 200 or not isinstance(data, dict) or not data.get("link"):
@@ -518,8 +502,7 @@ class OpenSubtitlesClient:
         path.parent.mkdir(parents=True, exist_ok=True)
         if path.exists():
             log.info("overwriting existing subtitle %s", path)
-        # write to a temp file then replace, so an interrupted download never
-        # leaves a truncated/corrupt file where a subtitle already exists
+        # write-then-replace: an interrupted download never corrupts a file
         tmp = path.with_name(f".{path.name}.tmp")
         try:
             tmp.write_bytes(payload)

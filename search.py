@@ -1,8 +1,5 @@
-"""Search orchestration helpers.
-
-Pure logic (no GTK): guessit metadata extraction, building :class:`SearchQuery`
-from a video or a typed title, and the scoring / sorting / filtering applied
-to search results before they hit the UI.
+"""Pure search logic (no GTK): guessit metadata, query building, and the
+scoring / sorting applied to results before they reach the UI.
 """
 
 from __future__ import annotations
@@ -80,9 +77,8 @@ def build_query(
 ) -> SearchQuery:
     """Build the query for the next search.
 
-    * typed *text* → manual name search (guessit splits season/episode out)
-    * no text + on-disk video → hash search on the file (``use_file``)
-    * no text + remote media → name search from the video metadata
+    Typed *text* wins; otherwise a local file gets hash-searched and remote
+    media falls back to a name search.
     """
     query = SearchQuery(languages=tuple(languages) or ("en",))
     if text.strip():
@@ -157,11 +153,8 @@ def sort_results(
     video: Optional[VideoInfo],
     query: SearchQuery,
 ) -> list[SubtitleResult]:
-    """Return a new list sorted by *mode* (rating/downloads/votes/trusted/…).
-
-    Modes backed by the OpenSubtitles ``order_by`` parameter the server
-    cannot express client-side (``new_downloads``, ``hd``, ``release``) are
-    returned unchanged — the list arrives server-ordered already.
+    """Return *items* sorted by *mode*. Modes the server already ordered
+    (``new_downloads``, ``hd``, ``release``) pass through unchanged.
     """
     for sub in items:
         if mode == "score":

@@ -1,16 +1,9 @@
-"""OpenSubtitles movie-hash computation (pure Python, stdlib only).
+"""OpenSubtitles movie hash (pure Python, stdlib only).
 
-Implements the well-known OpenSubtitles hash used by the ``moviehash`` /
-``moviebytesize`` search parameters of the OpenSubtitles REST API:
-
-* read the first 64 KiB of the file,
-* if the file is larger than 128 KiB, also read the last 64 KiB,
-* interpret the file size plus every 8-byte little-endian chunk of that data
-  as unsigned 64-bit integers and sum them modulo 2**64,
-* emit the sum as a 16-digit lowercase hex string.
-
-This is the same algorithm the reference VLSub extension computes in Lua and
-that subliminal used to apply via its ``hash_refine`` refiner.
+First 64 KiB of the file plus the last 64 KiB (if it's bigger than 128
+KiB), summed with the file size as little-endian 64-bit chunks mod 2**64,
+emitted as 16 lowercase hex digits. The same algorithm the VLSub extension
+uses for its ``moviehash``/``moviebytesize`` search parameters.
 """
 
 from __future__ import annotations
@@ -22,11 +15,7 @@ _MASK64 = (1 << 64) - 1
 
 
 def compute_movie_hash(path: str) -> tuple[str, int]:
-    """Return ``(hash_hex, file_size)`` for the video file at *path*.
-
-    *path* must exist and be readable.  The hash is 16 lowercase hex
-    characters; the size is the raw byte count (used as ``moviebytesize``).
-    """
+    """Return ``(hash_hex, file_size)`` for the video at *path*."""
     size = os.path.getsize(path)
     with open(path, "rb") as fh:
         data = fh.read(_CHUNK_SIZE)

@@ -1,22 +1,10 @@
 #!/usr/bin/env python3
-"""Tests for the OpenSubtitles REST client download/search flow.
+"""Tests for the OpenSubtitles client's search/download flow.
 
-Covers the behaviour ported from the official VLSub extension
-(``opensubtitles/vlsub-opensubtitles-com``) into
-:class:`opensubtitles_client.OpenSubtitlesClient`:
-
-* movie hash computation (``moviehash`` module)
-* search params: moviehash/moviebytesize, query/season/episode, imdb_id,
-  languages, order_by/order_direction
-* result mapping from the API ``attributes`` payload
-* empty hash search -> name search fallback
-* login + bearer-token caching, 401 re-login retry, missing-credentials error
-* the download pipeline: POST /download (file_id as string) -> GET link ->
-  gunzip -> save with ``<video>.<lang>.<format>`` naming + encoding
-* the async wrappers and their error/timeout mapping
-
-No network: the client's ``_http_request`` is replaced with a fake that
-records calls and returns canned payloads.  Runs without pytest or a display:
+Covers movie hash, search params, result mapping, the hash->name fallback,
+login/401 handling, and the download pipeline (naming, encoding,
+overwrite, 503 retries). The client's ``_http_request`` is swapped for a
+fake, so nothing touches the network and no display is needed:
 
     python3 tests/test_download.py
 """

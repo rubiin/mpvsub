@@ -1,9 +1,7 @@
-"""Caching for search results.
+"""In-memory TTL cache for search results.
 
-Keeps recently returned subtitle lists in memory for a short TTL so that
-re-searching (e.g. switching language filters or sorting) stays instant and
-repeated network calls are avoided.  The OpenSubtitles client keys the
-cache by query + sort mode, see :mod:`opensubtitles_client`.
+Re-searching (language/sort changes) stays instant instead of hitting the
+network again. The client keys it by query + sort mode.
 """
 
 from __future__ import annotations
@@ -35,7 +33,7 @@ class SearchCache:
         return results
 
     def set(self, key: str, results: list[SubtitleResult]) -> None:
-        # keep the cache bounded: drop the oldest entry when it grows too big
+        # bounded: evict the oldest entry when it grows too big
         if len(self._items) >= 64:
             oldest = min(self._items, key=lambda k: self._items[k][0])
             del self._items[oldest]

@@ -1,8 +1,7 @@
 """The results list: a Gtk.ColumnView over a Gio.ListStore.
 
-Rows are wrapped in a small GObject (:class:`ResultItem`) because
-``Gio.ListStore`` requires GObject instances.  A single Subtitle Name
-column that expands to the full width.
+Rows are wrapped in a tiny GObject because ``Gio.ListStore`` needs
+GObject instances. One expanding Subtitle Name column.
 """
 
 from __future__ import annotations
@@ -47,10 +46,8 @@ class ResultList:
 
         self._build_columns()
 
-        # GtkColumnView does not scroll on its own: without a scrolled
-        # window it grows to the full content height.  Wrapping it keeps the
-        # popup compact (~5-6 rows visible) with the rest scrollable, like
-        # VLC's dialog.
+        # GtkColumnView doesn't scroll on its own; wrap it so only ~5-6
+        # rows show and the rest scroll, like VLC's dialog.
         scroller = Gtk.ScrolledWindow()
         scroller.set_child(self.view)
         scroller.set_vexpand(True)

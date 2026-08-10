@@ -1,14 +1,7 @@
--- mpvsub.lua — launch the native GTK4 subtitle downloader from mpv.
---
--- CTRL+g (default) opens the VLC-style subtitle downloader popup for the
--- current file.  The script:
---   1. makes sure mpv listens on an IPC unix socket (reusing one that is
---      already configured via --input-ipc-server),
---   2. waits for the socket to appear,
---   3. launches `main.py --socket <sock> --file <current file>` detached.
---
--- The app talks back to mpv over the socket to auto-load downloaded
--- subtitles (sub-add) and to follow media changes.
+-- mpvsub.lua — CTRL+g (default) opens the subtitle downloader popup for
+-- the current file: sets up the IPC socket, waits for it, then launches
+-- `main.py --socket <sock> --file <file>` detached. The app talks back
+-- over the socket to auto-load subtitles (sub-add) and follow media.
 --
 -- Config: script-opts/mpvsub.conf (see mpvsub.conf in this repo):
 --   key=CTRL+g            open the popup
@@ -47,9 +40,8 @@ local function app_path()
     return "main.py"
 end
 
--- Make mpv listen on an IPC socket.  Reuses --input-ipc-server if the user
--- already configured one; otherwise creates a per-instance socket under the
--- runtime dir.
+-- Reuse --input-ipc-server if set, else create a per-instance socket
+-- under the runtime dir.
 local function ensure_socket()
     local sock = mp.get_property("input-ipc-server")
     if not sock or sock == "" then
@@ -62,9 +54,7 @@ local function ensure_socket()
     return sock
 end
 
--- check the socket file with stat(), NOT io.open: opening a unix socket
--- path returns ENXIO (io.open fails) or blocks, so it can't be used as an
--- existence probe.
+-- Probe with stat(), not io.open(): opening a unix socket fails/blocks.
 local function wait_for_socket(path, cb, tries)
     tries = tries or 0
     if tries > 50 then cb(false) return end
