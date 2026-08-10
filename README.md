@@ -119,6 +119,22 @@ python3 -m venv --system-site-packages .venv
 ./dist/mpvsub/mpvsub
 ```
 
+### Building with `just`
+
+If you have [just](https://github.com/casey/just) installed, the repo's
+`justfile` wraps the common tasks (same commands as above):
+
+```sh
+just setup    # create .venv + install dependencies
+just test     # run both test suites
+just build    # PyInstaller bundle into dist/mpvsub
+just bundle   # build + package as mpvsub-linux-x86_64.zip
+just run      # launch the app (args pass through, e.g. `just run movie.mkv`)
+just clean    # remove build artifacts (build/, dist/, zips)
+```
+
+Run `just` with no arguments to list every recipe.
+
 ## Usage
 
 The popup is a compact, fixed-size 700×500 window with the classic labelled
