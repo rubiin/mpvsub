@@ -108,8 +108,8 @@ class SubtitleWindow(Adw.ApplicationWindow):
         super().__init__(
             application=application,
             title="Subtitle downloader",
-            default_width=700,
-            default_height=500,
+            default_width=cli.width if cli and cli.width else 700,
+            default_height=cli.height if cli and cli.height else 500,
         )
         # fixed size like the reference dialog: the results list scrolls
         self.set_resizable(False)

@@ -30,14 +30,14 @@ _LOCALE_ALIASES = {
     "az": "az-az",
 }
 
-APP_ID = "org.mpvui.SubtitleDownloader"
+APP_ID = "org.mpvsub.SubtitleDownloader"
 
 CONFIG_DIR = Path(
     os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")
-) / "mpvui-subtitles"
+) / "mpvsub-subtitles"
 DATA_DIR = Path(
     os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")
-) / "mpvui-subtitles"
+) / "mpvsub-subtitles"
 SUBTITLE_DIR = Path.home() / ".local/share" / "mpv" / "subtitles"
 
 SETTINGS_FILE = CONFIG_DIR / "settings.json"
@@ -61,7 +61,7 @@ SORT_MODES: tuple[tuple[str, str, Optional[str]], ...] = (
 
 #: constant mixed into the obfuscation key so the same machine-id never
 #: yields the same bytes as another app using this scheme
-_OBFUSCATION_PEPPER = b"mpvui-subtitles:v1"
+_OBFUSCATION_PEPPER = b"mpvsub-subtitles:v1"
 _machine_key_cache: Optional[bytes] = None
 
 

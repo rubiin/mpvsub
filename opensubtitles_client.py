@@ -170,7 +170,7 @@ class OpenSubtitlesClient:
                 "No OpenSubtitles credentials configured — set "
                 "OPENSUBTITLES_USERNAME and OPENSUBTITLES_PASSWORD (or the "
                 "username/password fields in "
-                "~/.config/mpvui-subtitles/settings.json)."
+                "~/.config/mpvsub-subtitles/settings.json)."
             )
         if self._token and self._token_expires > time.time():
             return self._token

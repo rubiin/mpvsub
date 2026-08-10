@@ -61,7 +61,7 @@ def main() -> int:
     print(f"live search returned {len(results)} results", flush=True)
 
     app = Adw.Application.new(
-        "org.mpvui.WindowCapture", Gio.ApplicationFlags.NON_UNIQUE
+        "org.mpvsub.WindowCapture", Gio.ApplicationFlags.NON_UNIQUE
     )
     state = {}
 

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Plain-assert tests for the non-GUI logic.
 
-Runs without pytest or a display:
+Runs without pytest or a display — use the project venv python, because
+the episode-parsing tests need guessit (a pip dependency):
 
-    python3 tests/test_logic.py
+    .venv/bin/python3 tests/test_logic.py
 
 Covers: models, settings persistence, the TTL cache and the search
 scoring / sorting / filtering helpers.
@@ -32,6 +33,16 @@ from search import (  # noqa: E402
     video_from_path,
 )
 from settings import Settings  # noqa: E402
+
+
+def _guessit_available() -> bool:
+    """guessit is a pip dependency (requirements.txt); without it the
+    episode-parsing tests can't run and must fail with a clear reason."""
+    try:
+        import guessit  # noqa: F401
+        return True
+    except ImportError:
+        return False
 
 
 def make_sub(**overrides) -> SubtitleResult:
@@ -194,9 +205,9 @@ def test_build_query_manual_movie() -> None:
 
 def test_build_query_manual_episode() -> None:
     q = build_query(None, "Breaking Bad S01E02", ["en"])
-    assert q.kind == "episode"
-    assert q.season == 1
-    assert q.episode == 2
+    assert q.kind == "episode", f"expected kind 'episode', got {q.kind!r}"
+    assert q.season == 1, f"expected season 1, got {q.season!r}"
+    assert q.episode == 2, f"expected episode 2, got {q.episode!r}"
 
 
 def test_build_query_fields() -> None:
@@ -222,10 +233,10 @@ def test_build_query_auto_file() -> None:
 
 def test_video_from_path_episode() -> None:
     video = video_from_path("Better.Call.Saul.S03E04.1080p.mkv")
-    assert video.kind == "episode"
-    assert video.season == 3
-    assert video.episode == 4
-    assert video.series
+    assert video.kind == "episode", f"expected kind 'episode', got {video.kind!r}"
+    assert video.season == 3, f"expected season 3, got {video.season!r}"
+    assert video.episode == 4, f"expected episode 4, got {video.episode!r}"
+    assert video.series, f"expected a series name, got {video.series!r}"
 
 
 def test_score_hash_match() -> None:
@@ -276,6 +287,14 @@ def main() -> None:
             failures += 1
             print(f"ERR  {fn.__name__}: {type(exc).__name__}: {exc}")
     print(f"\n{len(tests) - failures}/{len(tests)} passed")
+    if not _guessit_available():
+        print(
+            "NOTE: guessit is not installed — the episode-parsing tests "
+            "cannot run.\n"
+            "      Install it (e.g. .venv/bin/pip install -r requirements.txt) "
+            "or run the\n"
+            "      suite with the venv python (.venv/bin/python3)."
+        )
     return 1 if failures else 0
 
 

@@ -18,7 +18,7 @@ from ui import row as row_cells
 class ResultItem(GObject.Object):
     """GObject wrapper so results can live in a Gio.ListStore."""
 
-    __gtype_name__ = "MpvuiResultItem"
+    __gtype_name__ = "MpvsubResultItem"
 
     def __init__(self, subtitle: SubtitleResult) -> None:
         super().__init__()

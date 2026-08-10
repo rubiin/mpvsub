@@ -1,4 +1,4 @@
--- submenu-gtk.lua — launch the native GTK4 subtitle downloader from mpv.
+-- mpvsub.lua — launch the native GTK4 subtitle downloader from mpv.
 --
 -- CTRL+g (default) opens the VLC-style subtitle downloader popup for the
 -- current file.  The script:
@@ -10,7 +10,7 @@
 -- The app talks back to mpv over the socket to auto-load downloaded
 -- subtitles (sub-add) and to follow media changes.
 --
--- Config: script-opts/submenu-gtk.conf (see submenu-gtk.conf in this repo):
+-- Config: script-opts/mpvsub.conf (see mpvsub.conf in this repo):
 --   key=CTRL+g            open the popup
 --   python=python3        interpreter (use your venv python if needed)
 --   app=                  absolute path to main.py (default: next to this script)
@@ -26,7 +26,7 @@ o = {
     app = "",
     extra_args = "",
 }
-options.read_options(o, "submenu-gtk")
+options.read_options(o, "mpvsub")
 
 local function script_dir()
     if mp.script_dir and mp.script_dir ~= "" then return mp.script_dir end
@@ -56,7 +56,7 @@ local function ensure_socket()
         local base = os.getenv("XDG_RUNTIME_DIR")
         if not base or base == "" then base = "/tmp" end
         local pid = mp.get_property_number("pid") or 0
-        sock = utils.join_path(base, "submenu-gtk-" .. pid .. ".sock")
+        sock = utils.join_path(base, "mpvsub-" .. pid .. ".sock")
         mp.set_property("input-ipc-server", sock)
     end
     return sock
@@ -80,7 +80,7 @@ local function start()
     local sock = ensure_socket()
     wait_for_socket(sock, function(ok)
         if not ok then
-            mp.osd_message("submenu-gtk: could not start IPC socket", 3)
+            mp.osd_message("mpvsub: could not start IPC socket", 3)
             return
         end
         local args = { o.python, app_path(), "--socket", sock }
@@ -102,4 +102,4 @@ local function start()
     end)
 end
 
-mp.add_key_binding(o.key, "submenu-gtk-open", start)
+mp.add_key_binding(o.key, "mpvsub-open", start)
