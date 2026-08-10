@@ -44,8 +44,9 @@ bash install.sh
 
 `install.sh` overrides: `MPVSUB_REPO_URL` (clone URL), `MPVSUB_DIR` (install
 location, default `~/mpvsub`), `XDG_CONFIG_HOME` (mpv config
-root). It refuses to run if GTK4/Libadwaita Python bindings are missing and
-prints the distro-specific command to install them.
+root). It checks for `python3` (3.12+) and the GTK4/Libadwaita Python
+bindings (plus `git`, for the remote path) and prints the
+distro-specific install command if any are missing.
 
 ### Manual
 
@@ -99,7 +100,7 @@ form — about five or six result rows are visible at once and the list
 scrolls for the rest:
 
 - **Subtitles language** — dropdown with the full OpenSubtitles language
-  list (100+ languages, including `pt-br`, `zh-cn`, `zh-tw`, …); the last
+  list (99 languages, including `pt-br`, `zh-cn`, `zh-tw`, …); the last
   selection is remembered.
 - **Search by hash** — finds subtitles for the exact file on disk via the
   OpenSubtitles movie hash; no typing needed. If the hash has no matches it
@@ -110,8 +111,9 @@ scrolls for the rest:
 - **IMDB ID** — search directly by IMDB id (`tt1375666`) instead of a title.
 - **Sort by** — the OpenSubtitles API sort options: Best match (client-side
   scoring), Downloads, New downloads, Ratings, Votes, Upload date, Trusted
-  uploader, HD, Release — plus an **↑ Asc / ↓ Desc** direction toggle.
-  Sorting is applied server-side via `order_by`/`order_direction`.
+  uploader, HD, Release — plus an **↑ Asc / ↓ Desc**  direction toggle.
+  Sorting is applied server-side via `order_by`/`order_direction` (except
+  Best match, which is scored locally).
 - **Results list** — a scrollable list showing ~5-6 rows at first, one
   Subtitle Name column spanning the full width (with a **HI** badge for
   hearing-impaired releases). Rows highlight on hover;
@@ -207,7 +209,7 @@ failed search automatically.
 
 The app stores its settings in
 `~/.config/mpvsub-subtitles/settings.json` (last languages, sort mode +
-direction, download dir, encoding, window size, credentials). The download
+direction, download dir, encoding, credentials). The download
 directory is only used as a fallback for searches without a local video
 file — subtitles for a file on disk are saved right next to it. Change it
 there if you want the fallback elsewhere.
