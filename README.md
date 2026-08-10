@@ -97,18 +97,24 @@ its key binding is released.
 ## Building executables
 
 `packaging/` holds a PyInstaller spec that bundles the app into a standalone
-executable. The `.github/workflows/build.yml` workflow builds both platforms
-on every push to `master` and on version tags (`v*`), smoke-tests each
-bundle, and uploads the zips as run artifacts. Pushing a `v*` tag (e.g.
-`git tag v1.0 && git push --tags`) also creates a GitHub **Release** with
-both zips attached:
+executable. The `.github/workflows/build.yml` workflow builds all three
+platforms on every push to `master` and on version tags (`v*`), smoke-tests
+each bundle, and uploads the zips as run artifacts. Pushing a `v*` tag
+(e.g. `git tag v1.0 && git push --tags`) also creates a GitHub **Release**
+with every platform zip attached:
 
 - **Linux** — `dist/mpvsub/` (launcher + bundled Python). The gi/GTK4
   bindings come from the system, so the machine running it still needs
   GTK4 + libadwaita (see Requirements).
+- **macOS** — a `dist/mpvsub/` bundle built against Homebrew's GTK4
+  stack (`brew install gtk4 libadwaita pygobject3`); needs GTK4 +
+  libadwaita installed to run, like the Linux build.
 - **Windows** — a self-contained `mpvsub.exe` folder built against the
   MSYS2 MINGW64 GTK4 stack: gtk4, libadwaita, the Adwaita icon theme, glib
   schemas and gdk-pixbuf loaders are bundled inside.
+
+PyInstaller cannot cross-compile, so each platform is built on its own OS
+(a Linux box can only build the Linux bundle locally). CI covers all three.
 
 Build locally on Linux (needs the system GTK4 bindings):
 
@@ -122,15 +128,24 @@ python3 -m venv --system-site-packages .venv
 ### Building with `just`
 
 If you have [just](https://github.com/casey/just) installed, the repo's
-`justfile` wraps the common tasks (same commands as above):
+`justfile` wraps the common tasks (same commands as above). `just build`
+and `just bundle` detect the current OS and build for it:
 
 ```sh
 just setup    # create .venv + install dependencies
 just test     # run both test suites
-just build    # PyInstaller bundle into dist/mpvsub
-just bundle   # build + package as mpvsub-linux-x86_64.zip
+just build    # PyInstaller bundle for the current platform (dist/mpvsub)
+just bundle   # build + package as mpvsub-<platform>-<arch>.zip
 just run      # launch the app (args pass through, e.g. `just run movie.mkv`)
 just clean    # remove build artifacts (build/, dist/, zips)
+```
+
+To target a specific platform (run on a machine of that OS):
+
+```sh
+just build-linux      # or bundle-linux
+just build-macos      # or bundle-macos  (needs brew gtk4 libadwaita pygobject3)
+just build-windows    # or bundle-windows  (needs MSYS2 MINGW64 python)
 ```
 
 Run `just` with no arguments to list every recipe.
