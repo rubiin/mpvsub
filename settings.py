@@ -1,8 +1,9 @@
 """Persistent user settings.
 
 Stored as a small JSON document under the XDG config directory so the app
-remembers the last language selection, sort order, window size and download
-folder between runs.
+remembers the last language selection, sort mode/direction, download
+folder, encoding and credentials between runs. The window size is not
+persisted — the window is fixed-size (overridable via --width/--height).
 """
 
 from __future__ import annotations
