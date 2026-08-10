@@ -104,6 +104,7 @@ class CredentialsDialog(Adw.Window):
             )
         )
         body.set_wrap(True)
+        body.set_max_width_chars(60)
         body.set_xalign(0.0)
         body.add_css_class("dim-label")
         content.append(body)
@@ -154,6 +155,9 @@ class CredentialsDialog(Adw.Window):
         content.append(btn_row)
 
         self.set_content(content)
+        # fixed compact width (resizable=False, so the window is exactly
+        # this wide); the description wraps to fit
+        self.set_default_size(500, -1)
         self.set_default_widget(btn_save)
 
         def _save() -> None:
